@@ -161,11 +161,12 @@
 	padding: 1rem 0;
 }
 
-/* Reveal's print stylesheet (html.reveal-print) re-centers slide content with
-   higher specificity; keep PDF export top-aligned like the live presentation.
+/* Reveal's print stylesheet re-centers slide content with
+   `html.reveal-print ... { justify-content: center !important }`; counter it
+   at equal weight so PDF export stays top-aligned like the live presentation.
    Slides that should center (e.g. TitleSlide) do so themselves. */
 html.reveal-print .reveal .slides section {
-	justify-content: flex-start;
+	justify-content: flex-start !important;
 }
 
 .reveal .controls {
