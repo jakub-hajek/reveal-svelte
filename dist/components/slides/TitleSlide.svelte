@@ -32,6 +32,8 @@
 		text-align: center;
 		display: flex;
 		flex-direction: column;
+		justify-content: center;
+		height: 100%;
 		gap: 1.5rem;
 	}
 
