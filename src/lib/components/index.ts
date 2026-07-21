@@ -1,0 +1,20 @@
+export { default as BaseSlide } from './slides/BaseSlide.svelte';
+export { default as TitleSlide } from './slides/TitleSlide.svelte';
+export { default as SlideFooter } from './slides/SlideFooter.svelte';
+export { default as MarkdownSlide } from './MarkdownSlide.svelte';
+
+export { default as TwoColumnLayout } from './layouts/TwoColumnLayout.svelte';
+export { default as FullImageLayout } from './layouts/FullImageLayout.svelte';
+export { default as GridLayout } from './layouts/GridLayout.svelte';
+
+export { default as BarChart } from './charts/BarChart.svelte';
+export { default as LineChart } from './charts/LineChart.svelte';
+export { default as PieChart } from './charts/PieChart.svelte';
+
+export { default as Math } from './content/Math.svelte';
+export { default as Table } from './content/Table.svelte';
+export { default as Markdown } from './content/Markdown.svelte';
+export { default as Code } from './content/Code.svelte';
+export { default as Excalidraw } from './content/Excalidraw.svelte';
+
+export { default as LogoOverlay } from './LogoOverlay.svelte';

@@ -1,0 +1,90 @@
+/* Generic theme tokens - consumed by reveal.css and components */
+:root {
+	/* Core backgrounds */
+	--theme-bg: var(--theme-bg);
+	--theme-surface-0: var(--theme-surface-0);
+	--theme-surface-1: var(--theme-surface-1);
+	--theme-surface-2: var(--theme-surface-2);
+
+	/* Text colors */
+	--theme-text: var(--theme-text);
+	--theme-heading: var(--theme-heading);
+	--theme-muted: var(--theme-muted);
+	--theme-subtext: var(--theme-subtext);
+
+	/* Accent colors */
+	--theme-primary: var(--theme-primary);
+	--theme-secondary: var(--theme-secondary);
+	--theme-border: var(--theme-border);
+
+	/* Link colors */
+	--theme-link: var(--theme-link);
+	--theme-link-hover: var(--theme-link-hover);
+
+	/* Code colors */
+	--theme-code-bg: var(--theme-code-bg);
+	--theme-code-text: var(--theme-code-text);
+	--theme-code-keyword: var(--theme-code-keyword);
+	--theme-code-string: var(--theme-code-string);
+	--theme-code-number: var(--theme-code-number);
+	--theme-code-comment: var(--theme-code-comment);
+	--theme-code-function: var(--theme-code-function);
+
+	/* Chart colors */
+	--theme-chart-1: var(--theme-chart-1);
+	--theme-chart-2: var(--theme-chart-2);
+	--theme-chart-3: var(--theme-chart-3);
+	--theme-chart-4: var(--theme-chart-4);
+	--theme-chart-5: var(--theme-chart-5);
+	--theme-chart-6: var(--theme-chart-6);
+	--theme-chart-7: var(--theme-chart-7);
+	--theme-chart-8: var(--theme-chart-8);
+	--theme-chart-9: var(--theme-chart-9);
+	--theme-chart-10: var(--theme-chart-10);
+	--theme-chart-11: var(--theme-chart-11);
+	--theme-chart-12: var(--theme-chart-12);
+
+	/* Backward compatibility - map old Catppuccin vars to new theme tokens */
+	--ctp-base: var(--theme-bg);
+	--ctp-surface0: var(--theme-surface-0);
+	--ctp-surface1: var(--theme-surface-1);
+	--ctp-surface2: var(--theme-surface-2);
+	--ctp-text: var(--theme-text);
+	--ctp-lavender: var(--theme-heading);
+	--ctp-subtext0: var(--theme-muted);
+	--ctp-subtext1: var(--theme-subtext);
+	--ctp-blue: var(--theme-link);
+	--ctp-sapphire: var(--theme-link-hover);
+	--ctp-mauve: var(--theme-secondary);
+	--ctp-peach: var(--theme-primary);
+
+	/* Additional Catppuccin overlay colors - map to theme equivalents */
+	--ctp-overlay0: var(--theme-surface-2);
+	--ctp-overlay1: var(--theme-border);
+	--ctp-overlay2: var(--theme-subtext);
+
+	/* Catppuccin accent colors for backward compat */
+	--ctp-rosewater: var(--theme-chart-1);
+	--ctp-flamingo: var(--theme-chart-2);
+	--ctp-pink: var(--theme-chart-3);
+	--ctp-red: var(--theme-chart-4);
+	--ctp-maroon: var(--theme-chart-5);
+	--ctp-yellow: var(--theme-chart-6);
+	--ctp-green: var(--theme-chart-7);
+	--ctp-teal: var(--theme-chart-8);
+	--ctp-sky: var(--theme-chart-9);
+
+	/* Alternative Catppuccin naming */
+	--catppuccin-mauve: var(--theme-secondary);
+	--catppuccin-text: var(--theme-text);
+	--catppuccin-base: var(--theme-bg);
+
+	/* Reveal.js standard variables */
+	--r-background-color: var(--theme-bg);
+	--r-main-color: var(--theme-text);
+	--r-heading-color: var(--theme-heading);
+	--r-link-color: var(--theme-link);
+	--r-link-color-hover: var(--theme-link-hover);
+	--r-selection-background-color: var(--theme-primary);
+	--r-selection-color: var(--theme-bg);
+}

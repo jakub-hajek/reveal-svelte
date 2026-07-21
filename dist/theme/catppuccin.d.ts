@@ -1,0 +1,27 @@
+export declare const theme: {
+    readonly base: string;
+    readonly surface0: string;
+    readonly surface1: string;
+    readonly surface2: string;
+    readonly overlay0: string;
+    readonly overlay1: string;
+    readonly overlay2: string;
+    readonly text: string;
+    readonly subtext0: string;
+    readonly subtext1: string;
+    readonly rosewater: string;
+    readonly flamingo: string;
+    readonly pink: string;
+    readonly mauve: string;
+    readonly red: string;
+    readonly maroon: string;
+    readonly peach: string;
+    readonly yellow: string;
+    readonly green: string;
+    readonly teal: string;
+    readonly sky: string;
+    readonly sapphire: string;
+    readonly blue: string;
+    readonly lavender: string;
+};
+export type ThemeColor = keyof typeof theme;

@@ -1,0 +1,23 @@
+node_modules/
+build/
+.svelte-kit/
+.env
+.env.*
+!.env.example
+.DS_Store
+.vscode/
+.idea/
+*.log
+*.tmp
+*.swp
+Thumbs.db
+coverage/
+test-results/
+playwright-report/
+
+# Vite transient timestamped config modules
+vite.config.ts.timestamp-*.mjs
+
+# NOTE: dist/ is deliberately COMMITTED — decks install this package from a
+# git URL, so the built output must be in the repository. Run `bun run package`
+# before tagging a release.
