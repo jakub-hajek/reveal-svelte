@@ -4,11 +4,14 @@ Svelte + Reveal.js component library for building presentations with slide disco
 
 ## Install
 
-The package is distributed via its git repository (built `dist/` is committed). Pin a tag:
+The package is distributed via its git repository (built `dist/` is committed):
 
 ```bash
-bun add reveal-svelte@github:jakub-hajek/reveal-svelte#v0.1.0
+bun add reveal-svelte@github:jakub-hajek/reveal-svelte
 ```
+
+This tracks the newest version on `main`; the resolved commit is recorded in the
+consumer's lockfile, and `bun update reveal-svelte` pulls the latest again.
 
 The fastest way to start a new presentation is the companion deck template:
 
