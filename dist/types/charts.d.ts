@@ -7,3 +7,30 @@ export interface ChartProps {
     width?: number;
     height?: number;
 }
+export interface GanttTask {
+    label: string;
+    /** ISO date string (e.g. '2026-03-01') or Date */
+    start: string | Date;
+    /** Omit for a milestone (single point in time) */
+    end?: string | Date;
+    /** Tasks in the same section share a color; sections appear in the legend */
+    section?: string;
+    /** 0–100; when set, the bar renders as a track with a solid fill */
+    progress?: number;
+    /** Overrides the section color for this task */
+    color?: string;
+    /** Force milestone rendering even when `end` is set */
+    milestone?: boolean;
+}
+export interface GanttChartProps {
+    tasks: GanttTask[];
+    /** true = current date, or an explicit date; draws a dashed marker line */
+    today?: boolean | string | Date;
+    /** Locale for axis labels and tooltips (defaults to the browser locale) */
+    locale?: string;
+    /** Legend label for tasks without a section (defaults per locale: cs → 'Ostatní', otherwise 'Other') */
+    otherLabel?: string;
+    width?: number;
+    rowHeight?: number;
+    labelWidth?: number;
+}

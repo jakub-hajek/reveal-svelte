@@ -6,6 +6,7 @@ export { default as TwoColumnLayout } from './layouts/TwoColumnLayout.svelte';
 export { default as FullImageLayout } from './layouts/FullImageLayout.svelte';
 export { default as GridLayout } from './layouts/GridLayout.svelte';
 export { default as BarChart } from './charts/BarChart.svelte';
+export { default as GanttChart } from './charts/GanttChart.svelte';
 export { default as LineChart } from './charts/LineChart.svelte';
 export { default as PieChart } from './charts/PieChart.svelte';
 export { default as Math } from './content/Math.svelte';

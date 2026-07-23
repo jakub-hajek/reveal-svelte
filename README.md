@@ -50,6 +50,40 @@ cd my-talk && bun install && bun run dev
 </RevealWrapper>
 ```
 
+## Components
+
+Slides (`BaseSlide`, `TitleSlide`, `MarkdownSlide`), layouts (`TwoColumnLayout`,
+`FullImageLayout`, `GridLayout`), charts (`BarChart`, `LineChart`, `PieChart`,
+`GanttChart`), and content (`Markdown`, `Table`, `Math`, `Code`, `Excalidraw`).
+
+### GanttChart
+
+Theme-aware project timeline with no chart.js dependency. Tasks in the same
+`section` share a color; a task without `end` renders as a milestone diamond.
+
+```svelte
+<script lang="ts">
+	import { GanttChart, type GanttTask } from 'reveal-svelte';
+
+	const tasks: GanttTask[] = [
+		{ label: 'Design', start: '2026-01-05', end: '2026-01-30', section: 'Phase 1', progress: 80 },
+		{ label: 'Build', start: '2026-02-02', end: '2026-03-20', section: 'Phase 2', progress: 30 },
+		{ label: 'Launch', start: '2026-03-27', section: 'Phase 2' } // milestone
+	];
+</script>
+
+<GanttChart {tasks} today="2026-02-15" width={1000} rowHeight={40} />
+```
+
+Props: `tasks`, `today` (`true` = now, or a date), `locale`, `otherLabel`,
+`width`, `rowHeight`, `labelWidth`. The time axis picks day/week/month/quarter/year
+ticks automatically from the date range.
+
+Dates are localized via `Intl` — pass any BCP 47 tag (`locale="cs-CZ"` →
+"5. 1.", "bře 2026"; default is the browser locale). The legend label for
+tasks without a `section` follows the locale (cs → "Ostatní", otherwise
+"Other"); override it for other languages with `otherLabel="Sonstige"`.
+
 ## Theming
 
 reveal-svelte supports multiple themes. Import the theme CSS files in your layout.
