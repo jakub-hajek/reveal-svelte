@@ -82,14 +82,21 @@ bun run test         # unit (vitest) + e2e (playwright)
 
 ## Releasing
 
-`dist/` is committed so that git-URL installs work without lifecycle scripts.
-To cut a release:
+`dist/` is committed so that git-URL installs work without lifecycle scripts —
+which also means every push to `main` is a release. Rebuild `dist/` in the same
+commit as the source change it belongs to:
 
 ```bash
 bun run release      # svelte-kit sync + svelte-package + publint + unit tests
-git add -A && git commit -m "release: vX.Y.Z"
-git tag vX.Y.Z && git push && git push --tags
+git add -A && git commit -m "..."
+git push
 ```
 
-Decks then update by bumping the tag in their `package.json` and running
-`bun update reveal-svelte`.
+Bump `version` in `package.json` for anything user-facing, so a deck can tell
+what it resolved to.
+
+Tags are not part of this: decks install untagged and track `main` (see
+[Install](#install)), so they pick a change up with `bun update reveal-svelte`
+and nothing to bump on their side. The `v0.1.x` tags are leftovers from before
+that switch and are not maintained — a deck still pinned to one should drop the
+`#vX.Y.Z` suffix from its dependency.
