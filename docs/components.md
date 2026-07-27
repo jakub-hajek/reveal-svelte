@@ -326,7 +326,10 @@ Unknown and self references are skipped silently. Recolor them with the
 
 **Groups.** With `groups`, each `section` gets a header row whose label is a
 disclosure button — click it, or focus it and press Enter or Space. (The key
-event is stopped so it doesn't also advance the slide.) The header carries a
+event is stopped so it doesn't also advance the slide.) The gutter switches from
+right-aligned to an outline: rows sit flush left and indent one
+`--gantt-group-indent` step per level. Charts without `groups` keep their labels
+tucked against the axis. The header carries a
 faint bar spanning the whole group, and its progress is the duration-weighted
 average of its tasks.
 

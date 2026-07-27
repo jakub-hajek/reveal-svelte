@@ -127,6 +127,22 @@ describe('GanttChart groups', () => {
         const headers = [...container.querySelectorAll('.gantt-group-toggle')];
         expect(headers.map((el) => el.textContent?.trim())).toEqual(['Discovery', 'Build']);
     });
+    // the gutter reads as an outline when there's a tree, and stays tucked
+    // against the axis when there isn't
+    it('indents gutter rows by their depth only once grouping is on', () => {
+        // the depth var is always emitted; without `has-groups` it is inert, and
+        // with no tree every row is at the root anyway
+        const flat = render(GanttChart, { props: { tasks: grouped } });
+        expect(flat.container.querySelector('.gantt-chart.has-groups')).toBeNull();
+        const flatDepths = [...flat.container.querySelectorAll('.gantt-label')].map((el) => el.style.getPropertyValue('--gantt-depth').trim());
+        expect(new Set(flatDepths)).toEqual(new Set(['0']));
+        flat.unmount();
+        const { container } = render(GanttChart, { props: { tasks: grouped, groups: true } });
+        expect(container.querySelector('.gantt-chart.has-groups')).not.toBeNull();
+        const depths = [...container.querySelectorAll('.gantt-label, .gantt-group-label')].map((el) => el.style.getPropertyValue('--gantt-depth').trim());
+        // header, its two tasks, header, its two tasks
+        expect(depths).toEqual(['0', '1', '1', '0', '1', '1']);
+    });
     it('keeps the gutter and the plot on the same number of rows', () => {
         const { container } = render(GanttChart, {
             props: { tasks: grouped, groups: true, collapsed: ['Build'] }

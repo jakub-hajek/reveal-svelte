@@ -300,6 +300,7 @@
 <figure
 	bind:this={figureEl}
 	class="gantt-chart {className}"
+	class:has-groups={groups}
 	class:is-toggling={toggling}
 	style="width: {width}px; --gantt-row-height: {rowHeight}px; --gantt-bar-label-size: {barLabelSize}px;"
 >
@@ -322,14 +323,16 @@
 					{#if row.kind === 'task'}
 						<div
 							class="gantt-label"
-							class:is-child={row.depth > 0}
-							style="--gantt-row-h: {row.height}px;"
+							style="--gantt-row-h: {row.height}px; --gantt-depth: {row.depth};"
 							title={row.label}
 						>
 							{row.label}
 						</div>
 					{:else}
-						<div class="gantt-group-label" style="--gantt-row-h: {row.height}px;">
+						<div
+							class="gantt-group-label"
+							style="--gantt-row-h: {row.height}px; --gantt-depth: {row.depth};"
+						>
 							<button
 								type="button"
 								class="gantt-group-toggle"
@@ -495,8 +498,19 @@
 		text-overflow: ellipsis;
 	}
 
-	.gantt-label.is-child {
-		padding-right: calc(14px + var(--gantt-group-indent, 12px));
+	/*
+	 * A grouped chart is a tree, so its gutter reads as an outline: flush left,
+	 * indented one step per level. A flat chart has no hierarchy to express and
+	 * keeps its labels tucked against the axis.
+	 */
+	.has-groups .gantt-label,
+	.has-groups .gantt-group-toggle {
+		text-align: left;
+		padding-left: calc(var(--gantt-group-indent, 14px) * var(--gantt-depth, 0));
+	}
+
+	.has-groups .gantt-group-toggle {
+		justify-content: flex-start;
 	}
 
 	.gantt-group-label {
