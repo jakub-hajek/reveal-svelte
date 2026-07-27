@@ -1,6 +1,8 @@
 # reveal-svelte
 
-Svelte + Reveal.js component library for building presentations with slide discovery helpers.
+Svelte 5 + Reveal.js component library for building presentations — slides,
+layouts, charts, markdown, math, code, and Excalidraw diagrams, plus slide
+discovery helpers.
 
 ## Install
 
@@ -26,7 +28,7 @@ cd my-talk && bun install && bun run dev
 <script lang="ts">
 	import { MarkdownSlide, RevealWrapper, createSlideEntries } from 'reveal-svelte';
 	import 'reveal-svelte/theme/reveal-base.css';
-	import 'reveal-svelte/theme/variables.css';
+	import 'reveal-svelte/theme/catppuccin/theme.css';
 	import 'reveal-svelte/theme/reveal.css';
 
 	const slideModules = import.meta.glob('/src/slides/*.svelte', { eager: true });
@@ -50,89 +52,26 @@ cd my-talk && bun install && bun run dev
 </RevealWrapper>
 ```
 
+Slides live in `src/slides/` as `.svelte` or `.md` files and are ordered by a
+numeric filename prefix (`10-intro.md`, `20-agenda.svelte`).
+
 ## Components
 
-Slides (`BaseSlide`, `TitleSlide`, `MarkdownSlide`), layouts (`TwoColumnLayout`,
-`FullImageLayout`, `GridLayout`), charts (`BarChart`, `LineChart`, `PieChart`,
-`GanttChart`), and content (`Markdown`, `Table`, `Math`, `Code`, `Excalidraw`).
+Full props tables and examples: **[docs/components.md](docs/components.md)**.
 
-### GanttChart
-
-Theme-aware project timeline with no chart.js dependency. Tasks in the same
-`section` share a color; a task without `end` renders as a milestone diamond.
-
-```svelte
-<script lang="ts">
-	import { GanttChart, type GanttTask } from 'reveal-svelte';
-
-	const tasks: GanttTask[] = [
-		{ label: 'Design', start: '2026-01-05', end: '2026-01-30', section: 'Phase 1', progress: 80 },
-		{ label: 'Build', start: '2026-02-02', end: '2026-03-20', section: 'Phase 2', progress: 30, dependsOn: 'Design' },
-		{ label: 'Launch', start: '2026-03-27', section: 'Phase 2', dependsOn: 'Build' } // milestone
-	];
-</script>
-
-<GanttChart {tasks} today="2026-02-15" width={1000} rowHeight={40} />
-```
-
-Props: `tasks`, `today` (`true` = now, or a date), `locale`, `otherLabel`,
-`dependencies`, `width`, `rowHeight`, `labelWidth`. The time axis picks
-day/week/month/quarter/year ticks automatically from the date range.
-
-#### Dependencies
-
-`dependsOn` draws finish-to-start arrows from one task's end to another's start.
-It takes a single reference or an array, matched against a task's `id` — or, if
-no ids are used, its `label`:
-
-```ts
-{ id: 'build', label: 'Build', start: '2026-02-02', end: '2026-03-20', dependsOn: ['design', 'hiring'] }
-```
-
-Arrows route straight when the successor starts later and elbow around the rows
-when it starts earlier (an overlap). Unknown and self references are skipped.
-Set `dependencies={false}` to hide the arrows without removing the data, and
-restyle them with the `--gantt-dependency-color` CSS variable.
-
-Dates are localized via `Intl` — pass any BCP 47 tag (`locale="cs-CZ"` →
-"5. 1.", "bře 2026"; default is the browser locale). The legend label for
-tasks without a `section` follows the locale (cs → "Ostatní", otherwise
-"Other"); override it for other languages with `otherLabel="Sonstige"`.
+| Group | Components |
+|-------|------------|
+| Deck | `RevealWrapper` |
+| Slides | `BaseSlide`, `TitleSlide`, `MarkdownSlide`, `SlideFooter`, `LogoOverlay` |
+| Layouts | `TwoColumnLayout`, `FullImageLayout`, `GridLayout` |
+| Charts | `BarChart`, `LineChart`, `PieChart`, `GanttChart` |
+| Content | `Markdown`, `Table`, `Math`, `Code`, `Excalidraw` |
+| Helpers | `createSlideEntries`, `config`, `init` |
 
 ## Theming
 
-reveal-svelte supports multiple themes. Import the theme CSS files in your layout.
-
-### Using Catppuccin (default)
-
-```svelte
-import 'reveal-svelte/theme/reveal-base.css';
-import 'reveal-svelte/theme/catppuccin/theme.css';
-import 'reveal-svelte/theme/reveal.css';
-```
-
-### Backward compatibility
-
-The old import path still works (defaults to Catppuccin):
-
-```svelte
-import 'reveal-svelte/theme/variables.css';
-```
-
-### Adding a logo overlay
-
-```svelte
-<RevealWrapper config={{
-  logo: {
-    src: '/logo.svg',
-    position: 'bottom-right',
-    width: '120px',
-    opacity: 0.9
-  }
-}}>
-```
-
-Logo positions: `bottom-right`, `bottom-left`, `top-right`, `top-left`.
+Themes are plain CSS variables; Catppuccin Mocha ships by default. Token
+reference, custom themes, logo and footer: **[docs/theming.md](docs/theming.md)**.
 
 ## Development
 
