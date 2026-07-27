@@ -143,6 +143,31 @@ describe('GanttChart groups', () => {
         // header, its two tasks, header, its two tasks
         expect(depths).toEqual(['0', '1', '1', '0', '1', '1']);
     });
+    // only a collapsed group subdivides its row; anywhere else the single lane
+    // must fill the row, or the bar floats above the label it belongs to
+    it('gives a single-lane row a lane that fills it', () => {
+        const flat = render(GanttChart, { props: { tasks: grouped, rowHeight: 40 } });
+        for (const lane of flat.container.querySelectorAll('.gantt-lane')) {
+            expect(lane.style.top).toBe('0px');
+            expect(lane.style.height).toBe('40px');
+        }
+        flat.unmount();
+        const { container } = render(GanttChart, {
+            props: { tasks: grouped, groups: true, collapsed: ['Build'], rowHeight: 40, laneHeight: 22 }
+        });
+        for (const row of container.querySelectorAll('.gantt-row:not(.is-collapsed)')) {
+            for (const lane of row.querySelectorAll('.gantt-lane')) {
+                expect(lane.style.top).toBe('0px');
+                expect(lane.style.height).toBe('40px');
+            }
+        }
+        // the collapsed group is the one place lanes are banded
+        const banded = [
+            ...container.querySelectorAll('.gantt-row.is-collapsed .gantt-lane')
+        ];
+        expect(banded.map((el) => el.style.height)).toEqual(['22px', '22px']);
+        expect(new Set(banded.map((el) => el.style.top)).size).toBe(2);
+    });
     it('keeps the gutter and the plot on the same number of rows', () => {
         const { container } = render(GanttChart, {
             props: { tasks: grouped, groups: true, collapsed: ['Build'] }

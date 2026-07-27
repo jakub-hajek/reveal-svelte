@@ -15,7 +15,7 @@
 		resolveGanttArrows,
 		toUTCms
 	} from '../../utils/gantt';
-	import type { GanttBarSpec, GanttEdge, GanttItem, GanttLane } from '../../utils/gantt';
+	import type { GanttBarSpec, GanttEdge, GanttItem, GanttLane, GanttRow } from '../../utils/gantt';
 	import type { GanttTask } from '../../types/charts';
 
 	let {
@@ -182,7 +182,7 @@
 		if (!dependencies || !scale || !plotWidth) return [];
 		return resolveGanttArrows(edges, anchors, { x: msToPx, rowY }).map((arrow) => ({
 			key: arrow.key,
-			line: ganttDependencyPath(arrow.x1, arrow.y1, arrow.x2, arrow.y2, laneSize),
+			line: ganttDependencyPath(arrow.x1, arrow.y1, arrow.x2, arrow.y2, groups ? laneSize : rowHeight),
 			head: ganttArrowHead(arrow.x2, arrow.y2)
 		}));
 	});
@@ -196,13 +196,23 @@
 		return (pct(ms) / 100) * plotWidth;
 	}
 
-	/** vertical centre of a bar: the row's own centre, or its lane's inside a collapsed group */
+	/**
+	 * The band a lane occupies inside its row. Only a collapsed group subdivides
+	 * its row; every other row has a single lane filling the whole of it, so its
+	 * bar stays centred against the label in the gutter.
+	 */
+	function laneBand(row: GanttRow, lane: number): { top: number; height: number } {
+		return row.kind === 'group-collapsed'
+			? { top: lane * laneSize, height: laneSize }
+			: { top: 0, height: row.height };
+	}
+
+	/** vertical centre of a bar, in plot-canvas coordinates */
 	function rowY(rowIndex: number, lane: number): number {
 		const row = layout.rows[rowIndex];
 		if (!row) return 0;
-		return row.kind === 'group-collapsed'
-			? row.y + lane * laneSize + laneSize / 2
-			: row.y + row.height / 2;
+		const band = laneBand(row, lane);
+		return row.y + band.top + band.height / 2;
 	}
 
 	function sectionColor(section: string): string {
@@ -374,10 +384,8 @@
 						>
 							{#each row.lanes as lane (lane.bar.key)}
 								{@const bar = lane.bar}
-								<div
-									class="gantt-lane"
-									style="top: {lane.lane * laneSize}px; height: {laneSize}px;"
-								>
+								{@const band = laneBand(row, lane.lane)}
+								<div class="gantt-lane" style="top: {band.top}px; height: {band.height}px;">
 									{#if bar.milestone}
 										<div
 											class="gantt-milestone"
