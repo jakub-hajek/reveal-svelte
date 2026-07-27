@@ -71,7 +71,12 @@
 				: []
 	);
 
-	const laneSize = $derived(laneHeight ?? Math.max(20, Math.round(rowHeight * 0.6)));
+	/**
+	 * A lane is a full row by default: collapsing should buy its space back by
+	 * putting tasks side by side, not by shrinking them into something thinner
+	 * than the rows above.
+	 */
+	const laneSize = $derived(laneHeight ?? rowHeight);
 
 	let chartColors: string[] = $state([]);
 	let canvasEl: HTMLDivElement | undefined = $state();
@@ -650,7 +655,7 @@
 		position: absolute;
 		top: 50%;
 		transform: translateY(-50%);
-		height: 62%;
+		height: var(--gantt-bar-thickness, 62%);
 		min-width: 4px;
 		border-radius: 4px;
 		overflow: hidden;
@@ -701,11 +706,6 @@
 	.gantt-bar.is-summary {
 		height: 34%;
 		border-radius: 2px;
-	}
-
-	/* 62% leaves an 11px label cramped in a lane-height bar */
-	.is-collapsed .gantt-bar {
-		height: var(--gantt-bar-thickness, 78%);
 	}
 
 	.gantt-bar-label {

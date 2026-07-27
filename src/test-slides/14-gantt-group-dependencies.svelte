@@ -45,8 +45,7 @@
 		legend
 		today="2026-03-20"
 		width={1050}
-		rowHeight={38}
-		laneHeight={24}
+		rowHeight={34}
 		barLabelSize={11}
 		labelWidth={200}
 	/>

@@ -43,7 +43,7 @@ names, so overriding one token updates everything downstream.
 | `--gantt-group-indent` | `14px` | Indent per tree level in a grouped chart's gutter |
 | `--gantt-bar-label-light` / `--gantt-bar-label-dark` | `#ffffff` / `#11111b` | The two inks for labels drawn on bars; which one is used is decided per bar by luminance |
 | `--gantt-bar-label-outside-color` | falls back to `--theme-text` | Labels drawn beside a bar, on the slide |
-| `--gantt-bar-thickness` | `78%` | Bar height inside a collapsed group row |
+| `--gantt-bar-thickness` | `62%` | Bar height as a share of its lane |
 
 Override per deck or per slide:
 

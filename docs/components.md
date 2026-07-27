@@ -289,7 +289,7 @@ diamond. With `groups`, sections become collapsible rows.
 | `legend` | `boolean` | auto | Forces the legend on/off; auto = shown only when there are 2+ sections and `groups` is off |
 | `width` | `number` | `900` | Total width in pixels |
 | `rowHeight` | `number` | `36` | Row height in pixels |
-| `laneHeight` | `number` | `max(20, rowHeight × 0.6)` | Height of one packed sub-lane inside a collapsed group |
+| `laneHeight` | `number` | `rowHeight` | Height of one packed sub-lane inside a collapsed group |
 | `barLabelSize` | `number` | `11` | Font size (px) of labels drawn on or beside bars |
 | `labelWidth` | `number` | `180` | Width of the left-hand label column |
 | `class` | `string` | `''` | CSS class |
@@ -337,7 +337,10 @@ Collapsing does not hide anything. The group's tasks are packed onto as few
 sub-lanes as their dates allow — tasks that don't overlap in time share a lane —
 and each task's label moves onto its own bar, since the left gutter now shows
 only the group name. A five-task group with no overlaps collapses to one lane;
-in the worst case it is still a row shorter than it was expanded.
+in the worst case it is still a row shorter than it was expanded. Lanes are a
+full `rowHeight` by default, so bars keep the same size and rhythm as the
+ungrouped rows around them — the space is bought back by putting tasks side by
+side, not by shrinking them. Set `laneHeight` lower to trade that for density.
 
 Label placement is chosen per bar: inside when it fits, otherwise to the right,
 and to the left when the bar runs to the edge of the plot. Labels are clamped to
