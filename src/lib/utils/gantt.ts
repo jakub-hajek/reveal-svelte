@@ -147,9 +147,10 @@ export function ganttArrowHead(x: number, y: number): string {
 // Bar labels
 //
 // When a group collapses, its tasks lose the left-hand gutter and carry their
-// own labels instead. Placement is decided in px here; the component paints it
-// with percentage arithmetic anchored to the bar, so the two never disagree
-// about which side the label sits on.
+// own labels instead. Placement is decided in px here; the component anchors the
+// label to its bar in percentages so it tracks the bar exactly, and takes the
+// `maxWidth` below verbatim so the two never disagree about how much room the
+// text has.
 // ---------------------------------------------------------------------------
 
 /** Mirrors `.gantt-bar { min-width: 4px }` — a 1px bar still paints 4px wide. */
@@ -208,6 +209,14 @@ export interface GanttLabelInput {
 	milestone?: boolean;
 	/** false when the bar colour can't be measured, so text must not sit on it */
 	insideAllowed?: boolean;
+	/**
+	 * px; leftmost edge a label placed *beside* the bar may reach — the end of
+	 * whatever is drawn to its left on the same lane. Defaults to the plot's own
+	 * left edge, which is right for a bar that has nothing beside it.
+	 */
+	boundLeft?: number;
+	/** px; rightmost edge such a label may reach. Defaults to the plot's right edge. */
+	boundRight?: number;
 }
 
 export interface GanttLabelLayout {
@@ -244,6 +253,9 @@ function barSpan(input: {
  * otherwise beside it — falling to the left when the bar runs to the right edge
  * of the plot, which is what makes edge overflow structurally impossible.
  *
+ * The boxes beside the bar stop at `boundLeft`/`boundRight`, so a label can be
+ * told to fit the gap its neighbours leave rather than the whole canvas.
+ *
  * `'none'` is not data loss: the bar keeps its `title` tooltip.
  */
 export function resolveGanttLabel(input: GanttLabelInput): GanttLabelLayout {
@@ -252,11 +264,13 @@ export function resolveGanttLabel(input: GanttLabelInput): GanttLabelLayout {
 
 	const [spanStart, spanEnd, barWidth] = barSpan(input);
 	const insideAllowed = input.insideAllowed !== false && input.milestone !== true;
+	const boundLeft = input.boundLeft ?? 0;
+	const boundRight = input.boundRight ?? plotWidth;
 
 	const candidates: [GanttLabelPlacement, number][] = [
 		['inside', insideAllowed ? barWidth - 2 * LABEL_PAD_INSIDE : 0],
-		['right', plotWidth - spanEnd - 2 * LABEL_GAP_OUTSIDE],
-		['left', spanStart - 2 * LABEL_GAP_OUTSIDE]
+		['right', boundRight - spanEnd - 2 * LABEL_GAP_OUTSIDE],
+		['left', spanStart - boundLeft - 2 * LABEL_GAP_OUTSIDE]
 	];
 
 	const textWidth = estimateTextWidth(text, fontSize);
@@ -607,6 +621,11 @@ export interface GanttLane {
 	/** px, so the caller can pick the label ink without redoing the geometry */
 	barX: number;
 	barWidth: number;
+	/**
+	 * true when a lane-mate ends where this bar starts. They share a lane and a
+	 * section colour, so without a seam down this edge the two read as one bar.
+	 */
+	abuts: boolean;
 }
 
 export type GanttRowKind = 'task' | 'group-header' | 'group-collapsed';
@@ -693,7 +712,137 @@ function barGeometry(bar: GanttBarSpec, o: GanttLayoutOptions) {
 
 /** A bar on its own row: the gutter carries the label, so nothing sits on the bar. */
 function gutterLane(bar: GanttBarSpec, o: GanttLayoutOptions): GanttLane {
-	return { lane: 0, bar, label: NO_LABEL, ...barGeometry(bar, o) };
+	return { lane: 0, bar, label: NO_LABEL, abuts: false, ...barGeometry(bar, o) };
+}
+
+/** Indices grouped by the lane they were packed onto, ordered along it. */
+function lanesInOrder(footprints: readonly GanttExtent[], lanes: readonly number[]): number[][] {
+	const byLane = new Map<number, number[]>();
+	lanes.forEach((lane, i) => {
+		const members = byLane.get(lane);
+		if (members) members.push(i);
+		else byLane.set(lane, [i]);
+	});
+	return [...byLane.values()].map((members) =>
+		members.sort((a, b) => footprints[a].startPx - footprints[b].startPx || a - b)
+	);
+}
+
+function labelFor(
+	bar: GanttBarSpec,
+	geometry: { barX: number; barWidth: number },
+	o: GanttLayoutOptions,
+	bounds?: { boundLeft: number; boundRight: number }
+): GanttLabelLayout {
+	return resolveGanttLabel({
+		text: bar.label,
+		plotWidth: o.plotWidth,
+		fontSize: o.labelFontSize,
+		milestone: bar.milestone,
+		insideAllowed: parseColorRGB(o.barColor(bar)) !== null,
+		...bounds,
+		...geometry
+	});
+}
+
+function extentOf(
+	bar: GanttBarSpec,
+	geometry: { barX: number; barWidth: number },
+	label: GanttLabelLayout,
+	plotWidth: number
+): GanttExtent {
+	return ganttBarExtent({ ...geometry, plotWidth, milestone: bar.milestone }, label);
+}
+
+/**
+ * Places every bar's label, one lane at a time and left to right along it.
+ *
+ * Bars on other lanes are drawn above or below, never beside, so only the two
+ * neighbours on a bar's own lane can bound its label: the ink already committed
+ * to its left, and the next bar's leading edge to its right. Sweeping in start
+ * order is what keeps those two bounds honest — the earlier bar claims the gap
+ * first, and the later one sees the claim rather than re-offering the same room.
+ * The first and last bar on a lane keep the full run to the plot edge.
+ */
+function placeLaneLabels(
+	bars: readonly GanttBarSpec[],
+	geometry: readonly { barX: number; barWidth: number }[],
+	footprints: readonly GanttExtent[],
+	lanes: readonly number[],
+	o: GanttLayoutOptions
+): GanttLabelLayout[] {
+	const labels = new Array<GanttLabelLayout>(bars.length).fill(NO_LABEL);
+
+	for (const members of lanesInOrder(footprints, lanes)) {
+		let committed = 0;
+		members.forEach((i, position) => {
+			const next = members[position + 1];
+			labels[i] = labelFor(bars[i], geometry[i], o, {
+				boundLeft: committed,
+				boundRight: next === undefined ? o.plotWidth : footprints[next].startPx
+			});
+			committed = extentOf(bars[i], geometry[i], labels[i], o.plotWidth).endPx;
+		});
+	}
+
+	return labels;
+}
+
+/**
+ * How close two bars have to be before the gap between them stops reading as a
+ * gap. Rounding alone puts touching bars a fraction of a pixel apart, and 1px of
+ * daylight is not something an audience can see from the back of a room.
+ */
+const ABUT_PX = 1.5;
+
+/**
+ * Which bars start where a lane-mate ended. Collapsing is what creates the
+ * problem: two consecutive tasks that used to be rows apart now sit edge to edge
+ * in the same section colour, and a continuous band is not what the dates say.
+ * The renderer draws a hairline down these bars' leading edge.
+ *
+ * A milestone is a diamond with its own outline, so it needs no help.
+ */
+function abuttingBars(
+	bars: readonly GanttBarSpec[],
+	footprints: readonly GanttExtent[],
+	lanes: readonly number[]
+): boolean[] {
+	const abuts = bars.map(() => false);
+	for (const members of lanesInOrder(footprints, lanes)) {
+		members.forEach((i, position) => {
+			const before = members[position - 1];
+			if (before === undefined || bars[i].milestone) return;
+			abuts[i] = footprints[i].startPx - footprints[before].endPx <= ABUT_PX;
+		});
+	}
+	return abuts;
+}
+
+/**
+ * Bars a lane-mate squeezed out of a label altogether, paired with the footprint
+ * they would need to keep one.
+ *
+ * A label must not cost a lane merely to stay whole — it can truncate. Being
+ * dropped is different: an unlabelled bar in a collapsed group is a bar with
+ * nothing on the slide to say what it is, and the tooltip that remains is no use
+ * to a room watching a projector. So these get the lane after all.
+ */
+function labellessBars(
+	bars: readonly GanttBarSpec[],
+	geometry: readonly { barX: number; barWidth: number }[],
+	labels: readonly GanttLabelLayout[],
+	o: GanttLayoutOptions
+): { index: number; extent: GanttExtent }[] {
+	const out: { index: number; extent: GanttExtent }[] = [];
+	bars.forEach((bar, i) => {
+		if (labels[i].placement !== 'none' || !bar.label) return;
+		// unbounded: what it could do with a lane to itself
+		const alone = labelFor(bar, geometry[i], o);
+		if (alone.placement === 'none') return;
+		out.push({ index: i, extent: extentOf(bar, geometry[i], alone, o.plotWidth) });
+	});
+	return out;
 }
 
 /**
@@ -749,25 +898,37 @@ export function layoutGanttRows(
 				.map((child) => (child.kind === 'leaf' ? barFromItem(child.item) : barFromGroup(child)))
 				.filter((bar): bar is GanttBarSpec => bar !== null);
 
-			const placed = bars.map((bar) => {
-				const geometry = barGeometry(bar, o);
-				const label = resolveGanttLabel({
-					text: bar.label,
-					plotWidth: o.plotWidth,
-					fontSize: o.labelFontSize,
-					milestone: bar.milestone,
-					insideAllowed: parseColorRGB(o.barColor(bar)) !== null,
-					...geometry
-				});
-				return {
-					bar,
-					label,
-					...geometry,
-					extent: ganttBarExtent({ ...geometry, plotWidth: o.plotWidth, milestone: bar.milestone }, label)
-				};
-			});
+			// Lanes are packed on the bars alone, before any label is placed. A label
+			// must not be able to cost a lane: it only needs one when it collides
+			// with a neighbour, and which bars are neighbours is exactly what the
+			// packing decides. Resolving labels first made that circular, so two
+			// tasks running back to back — touching, never overlapping — were split
+			// apart by the footprint of a label that would have truncated happily.
+			const geometry = bars.map((bar) => barGeometry(bar, o));
+			const footprints = bars.map((bar, i) =>
+				ganttBarExtent({ ...geometry[i], plotWidth: o.plotWidth, milestone: bar.milestone }, NO_LABEL)
+			);
 
-			const { lanes, laneCount } = packGanttLanes(placed.map((entry) => entry.extent));
+			const { lanes, laneCount: packedLanes } = packGanttLanes(footprints);
+			let laneCount = packedLanes;
+
+			// labels second, each fitted to the room its own lane leaves it
+			let labels = placeLaneLabels(bars, geometry, footprints, lanes, o);
+
+			// then the one case worth a lane: a label a neighbour left no room for
+			// at all. Moving those out only widens the bounds of everyone left
+			// behind, so a single re-place settles it.
+			const labelless = labellessBars(bars, geometry, labels, o);
+			if (labelless.length) {
+				const spill = packGanttLanes(labelless.map((entry) => entry.extent));
+				labelless.forEach((entry, i) => {
+					lanes[entry.index] = laneCount + spill.lanes[i];
+				});
+				laneCount += spill.laneCount;
+				labels = placeLaneLabels(bars, geometry, footprints, lanes, o);
+			}
+
+			const abuts = abuttingBars(bars, footprints, lanes);
 			const height = Math.max(laneCount, 1) * o.laneHeight;
 
 			rows.push({
@@ -778,12 +939,12 @@ export function layoutGanttRows(
 				y,
 				height,
 				laneCount,
-				lanes: placed.map((entry, i) => ({
+				lanes: bars.map((bar, i) => ({
 					lane: lanes[i],
-					bar: entry.bar,
-					label: entry.label,
-					barX: entry.barX,
-					barWidth: entry.barWidth
+					bar,
+					label: labels[i],
+					abuts: abuts[i],
+					...geometry[i]
 				})),
 				collapsed: true,
 				section: node.section

@@ -17,6 +17,12 @@
 		{ label: 'API', start: '2026-03-02', end: '2026-04-10', section: 'Realizace' },
 		{ label: 'Zámraz', start: '2026-06-01', section: 'Realizace' },
 
+		// back to back, with labels far wider than their bars: they share one lane
+		// anyway and truncate, because a label may never cost a task its lane
+		{ label: 'Analýza požadavků', start: '2026-03-02', end: '2026-03-27', section: 'Dokumentace' },
+		{ label: 'Uživatelská příručka', start: '2026-03-27', end: '2026-04-24', section: 'Dokumentace' },
+		{ label: 'Provozní dokumentace', start: '2026-04-24', end: '2026-05-22', section: 'Dokumentace' },
+
 		// a colour the chart can't measure (not hex/rgb) keeps its label beside the bar
 		{ label: 'Audit', start: '2026-06-05', end: '2026-06-12', section: 'Nasazení', color: 'rebeccapurple' },
 		{ label: 'Go / no-go', start: '2026-06-19', section: 'Nasazení', color: '#f38ba8' },
@@ -30,7 +36,7 @@
 	<GanttChart
 		{tasks}
 		groups
-		collapsed={['Realizace', 'Nasazení']}
+		collapsed={['Realizace', 'Dokumentace', 'Nasazení']}
 		today="2026-03-15"
 		locale="cs-CZ"
 		width={1050}
