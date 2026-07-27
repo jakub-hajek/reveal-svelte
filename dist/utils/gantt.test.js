@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeGanttScale, formatGanttDate, ganttArrowHead, ganttDependencyPath, toUTCms } from './gantt';
+import { buildGanttAnchorMap, buildGanttTree, computeGanttScale, estimateTextWidth, formatGanttDate, ganttArrowHead, ganttBarExtent, ganttDependencyPath, ganttLabelInk, layoutGanttRows, packGanttLanes, parseColorRGB, relativeLuminance, readableTextColor, resolveGanttArrows, resolveGanttLabel, rollUpGanttGroup, toUTCms } from './gantt';
 const DAY_MS = 86_400_000;
 describe('toUTCms', () => {
     it('parses ISO date strings as UTC midnight', () => {
@@ -91,5 +91,549 @@ describe('ganttDependencyPath', () => {
 describe('ganttArrowHead', () => {
     it('draws a closed triangle with its tip at the given point', () => {
         expect(ganttArrowHead(200, 50)).toBe('M 200 50 L 193 45.5 L 193 54.5 Z');
+    });
+});
+describe('estimateTextWidth', () => {
+    it('returns zero for empty text', () => {
+        expect(estimateTextWidth('', 11)).toBe(0);
+    });
+    it('grows with the number of characters', () => {
+        expect(estimateTextWidth('Backend', 11)).toBeGreaterThan(estimateTextWidth('Back', 11));
+    });
+    it('scales linearly with the font size', () => {
+        expect(estimateTextWidth('Rollout', 24)).toBeCloseTo(estimateTextWidth('Rollout', 12) * 2, 5);
+    });
+    it('charges more for wide glyphs than narrow ones', () => {
+        expect(estimateTextWidth('mmm', 11)).toBeGreaterThan(estimateTextWidth('iii', 11));
+    });
+    it('handles Czech diacritics without producing NaN', () => {
+        expect(estimateTextWidth('Příprava', 11)).toBeGreaterThan(0);
+    });
+});
+describe('resolveGanttLabel', () => {
+    const base = { plotWidth: 720, fontSize: 11 };
+    it('puts a short label inside a wide bar', () => {
+        const label = resolveGanttLabel({ ...base, text: 'Build', barX: 100, barWidth: 300 });
+        expect(label.placement).toBe('inside');
+        expect(label.maxWidth).toBe(300 - 16);
+        expect(label.truncated).toBe(false);
+    });
+    it('puts the label to the right of a narrow bar with room to spare', () => {
+        const label = resolveGanttLabel({ ...base, text: 'Build', barX: 100, barWidth: 12 });
+        expect(label.placement).toBe('right');
+    });
+    it('flips to the left when the bar runs to the right edge of the plot', () => {
+        const label = resolveGanttLabel({ ...base, text: 'Rollout', barX: 700, barWidth: 20 });
+        expect(label.placement).toBe('left');
+    });
+    it('never places a label inside a milestone', () => {
+        const label = resolveGanttLabel({
+            ...base,
+            text: 'Go / no-go',
+            barX: 300,
+            barWidth: 0,
+            milestone: true
+        });
+        expect(label.placement).toBe('right');
+    });
+    it('honours insideAllowed: false even for a full-width bar', () => {
+        const label = resolveGanttLabel({
+            ...base,
+            text: 'Audit',
+            barX: 0,
+            barWidth: 720,
+            insideAllowed: false
+        });
+        expect(label.placement).not.toBe('inside');
+    });
+    it('drops the label when every candidate box is unusably small', () => {
+        const label = resolveGanttLabel({
+            text: 'Security audit',
+            barX: 14,
+            barWidth: 2,
+            plotWidth: 40,
+            fontSize: 11
+        });
+        expect(label.placement).toBe('none');
+    });
+    it('truncates into the roomiest box when nothing fits outright', () => {
+        const label = resolveGanttLabel({
+            text: 'Requirements gathering',
+            barX: 0,
+            barWidth: 60,
+            plotWidth: 70,
+            fontSize: 11
+        });
+        expect(label.truncated).toBe(true);
+        expect(label.maxWidth).toBeGreaterThanOrEqual(24);
+        expect(label.width).toBe(label.maxWidth);
+    });
+    it('judges a sub-pixel bar on the 4px CSS minimum width', () => {
+        const thin = resolveGanttLabel({ ...base, text: 'A', barX: 100, barWidth: 1 });
+        const min = resolveGanttLabel({ ...base, text: 'A', barX: 100, barWidth: 4 });
+        expect(thin).toEqual(min);
+    });
+    it('never returns a box that overflows the plot', () => {
+        for (const barX of [0, 5, 200, 700, 719]) {
+            for (const barWidth of [1, 30, 400]) {
+                const label = resolveGanttLabel({ ...base, text: 'Frontend', barX, barWidth });
+                expect(label.maxWidth).toBeLessThanOrEqual(720);
+                expect(label.maxWidth).toBeGreaterThanOrEqual(0);
+            }
+        }
+    });
+    it('drops the label when the plot has no width yet', () => {
+        expect(resolveGanttLabel({ ...base, text: 'A', barX: 0, barWidth: 0, plotWidth: 0 }).placement).toBe('none');
+    });
+});
+describe('ganttBarExtent', () => {
+    const plotWidth = 720;
+    it('widens the footprint to the right of the bar when the label sits there', () => {
+        const input = { barX: 100, barWidth: 12, plotWidth };
+        const label = resolveGanttLabel({ ...input, text: 'Build', fontSize: 11 });
+        const extent = ganttBarExtent(input, label);
+        expect(extent.startPx).toBe(100);
+        expect(extent.endPx).toBeGreaterThan(112 + 6);
+    });
+    it('widens to the left when the label sits on the left', () => {
+        const input = { barX: 700, barWidth: 20, plotWidth };
+        const label = resolveGanttLabel({ ...input, text: 'Rollout', fontSize: 11 });
+        const extent = ganttBarExtent(input, label);
+        expect(extent.startPx).toBeLessThan(700);
+        expect(extent.endPx).toBe(720);
+    });
+    it('adds nothing when the label fits inside the bar', () => {
+        const input = { barX: 100, barWidth: 300, plotWidth };
+        const label = resolveGanttLabel({ ...input, text: 'Build', fontSize: 11 });
+        expect(ganttBarExtent(input, label)).toEqual({ startPx: 100, endPx: 400 });
+    });
+    it('gives a milestone the width of its diamond', () => {
+        const input = { barX: 300, barWidth: 0, plotWidth, milestone: true };
+        const label = resolveGanttLabel({ ...input, text: 'X', fontSize: 11 });
+        expect(ganttBarExtent(input, label).startPx).toBe(293);
+    });
+});
+describe('packGanttLanes', () => {
+    it('puts a sequential chain on a single lane', () => {
+        const { lanes, laneCount } = packGanttLanes([
+            { startPx: 0, endPx: 50 },
+            { startPx: 60, endPx: 100 },
+            { startPx: 110, endPx: 150 }
+        ]);
+        expect(laneCount).toBe(1);
+        expect(lanes).toEqual([0, 0, 0]);
+    });
+    it('needs exactly as many lanes as the largest overlapping set', () => {
+        const { laneCount } = packGanttLanes([
+            { startPx: 0, endPx: 100 },
+            { startPx: 10, endPx: 110 },
+            { startPx: 20, endPx: 120 }
+        ]);
+        expect(laneCount).toBe(3);
+    });
+    it('reuses a lane once its previous occupant has ended', () => {
+        const { lanes, laneCount } = packGanttLanes([
+            { startPx: 0, endPx: 100 },
+            { startPx: 10, endPx: 40 },
+            { startPx: 50, endPx: 90 }
+        ]);
+        expect(laneCount).toBe(2);
+        expect(lanes).toEqual([0, 1, 1]);
+    });
+    it('is independent of input order', () => {
+        const items = [
+            { startPx: 60, endPx: 100 },
+            { startPx: 0, endPx: 50 },
+            { startPx: 10, endPx: 40 }
+        ];
+        expect(packGanttLanes(items).laneCount).toBe(packGanttLanes([...items].reverse()).laneCount);
+    });
+    it('honours a gap between neighbours on the same lane', () => {
+        const items = [
+            { startPx: 0, endPx: 50 },
+            { startPx: 55, endPx: 90 }
+        ];
+        expect(packGanttLanes(items, 0).laneCount).toBe(1);
+        expect(packGanttLanes(items, 10).laneCount).toBe(2);
+    });
+    it('returns nothing for an empty list', () => {
+        expect(packGanttLanes([])).toEqual({ lanes: [], laneCount: 0 });
+    });
+});
+describe('parseColorRGB', () => {
+    it('parses hex in 3, 4, 6 and 8 digit forms', () => {
+        expect(parseColorRGB('#abc')).toEqual([170, 187, 204]);
+        expect(parseColorRGB('#abcd')).toEqual([170, 187, 204]);
+        expect(parseColorRGB('#AABBCC')).toEqual([170, 187, 204]);
+        expect(parseColorRGB('  #aabbccff ')).toEqual([170, 187, 204]);
+    });
+    it('parses rgb() and rgba() in comma and space syntax', () => {
+        expect(parseColorRGB('rgb(1, 2, 3)')).toEqual([1, 2, 3]);
+        expect(parseColorRGB('rgba(1 2 3 / 50%)')).toEqual([1, 2, 3]);
+        expect(parseColorRGB('rgb(100%, 0%, 50%)')).toEqual([255, 0, 128]);
+    });
+    it('returns null for colours it cannot measure', () => {
+        for (const value of [
+            'rebeccapurple',
+            'hsl(200 50% 50%)',
+            'color-mix(in srgb, #fff 30%, transparent)',
+            'var(--ctp-mauve)',
+            '#ab',
+            ''
+        ]) {
+            expect(parseColorRGB(value)).toBeNull();
+        }
+    });
+});
+describe('relativeLuminance', () => {
+    it('anchors at black and white', () => {
+        expect(relativeLuminance([0, 0, 0])).toBe(0);
+        expect(relativeLuminance([255, 255, 255])).toBeCloseTo(1, 10);
+    });
+    it('lands mid-scale for mid grey', () => {
+        expect(relativeLuminance([128, 128, 128])).toBeCloseTo(0.2159, 3);
+    });
+});
+describe('readableTextColor', () => {
+    const ink = { light: '#ffffff', dark: '#000000' };
+    // the shipped theme: pastel bars that must not carry the theme's light text
+    it('picks dark ink for every Catppuccin chart colour', () => {
+        const palette = [
+            '#f38ba8',
+            '#89b4fa',
+            '#a6e3a1',
+            '#fab387',
+            '#cba6f7',
+            '#74c7ec',
+            '#f9e2af',
+            '#94e2d5',
+            '#f5c2e7',
+            '#89dceb',
+            '#eba0ac',
+            '#b4befe'
+        ];
+        for (const color of palette) {
+            expect(readableTextColor(color, ink)).toBe('#000000');
+        }
+    });
+    // the Generali deck theme is the exact inverse: near-black bars on white
+    it('picks light ink for near-black corporate palette bars', () => {
+        for (const color of ['#1a1a1a', '#212121', '#424242']) {
+            expect(readableTextColor(color, ink)).toBe('#ffffff');
+        }
+    });
+    it('defaults to themeable custom properties rather than raw hex', () => {
+        expect(readableTextColor('#1a1a1a')).toContain('--gantt-bar-label-light');
+        expect(readableTextColor('#f9e2af')).toContain('--gantt-bar-label-dark');
+    });
+    it('falls back when the background cannot be measured', () => {
+        expect(readableTextColor('rebeccapurple', { ...ink, fallback: 'inherit' })).toBe('inherit');
+    });
+});
+describe('ganttLabelInk', () => {
+    const bar = { barX: 100, barWidth: 200, labelRight: 150 };
+    it('uses the slide text colour for any label placed beside a bar', () => {
+        for (const placement of ['right', 'left']) {
+            expect(ganttLabelInk({ ...bar, color: '#1a1a1a', placement }).tone).toBe('outside');
+        }
+    });
+    it('uses contrasting ink inside a solid bar', () => {
+        expect(ganttLabelInk({ ...bar, color: '#1a1a1a', placement: 'inside' }).tone).toBe('light');
+        expect(ganttLabelInk({ ...bar, color: '#f9e2af', placement: 'inside' }).tone).toBe('dark');
+    });
+    it('keeps contrasting ink while the label stays over the solid progress fill', () => {
+        const result = ganttLabelInk({ ...bar, color: '#1a1a1a', placement: 'inside', progress: 80 });
+        expect(result.tone).toBe('light');
+    });
+    // past the fill the "bar" is a 30% tint over the slide, so bar contrast lies
+    it('falls back to the slide text colour when the label overhangs the track', () => {
+        const result = ganttLabelInk({ ...bar, color: '#1a1a1a', placement: 'inside', progress: 10 });
+        expect(result.tone).toBe('outside');
+    });
+});
+// --- rows -------------------------------------------------------------------
+const day = (n) => Date.UTC(2026, 0, n);
+function mkItem(taskIndex, label, startDay, endDay, section, extra = {}) {
+    const startMs = day(startDay);
+    const endMs = day(endDay);
+    return {
+        taskIndex,
+        task: { label, start: new Date(startMs), end: new Date(endMs), section, ...extra },
+        startMs,
+        endMs,
+        milestone: extra.milestone === true
+    };
+}
+// 20px per day, with 1 January at x = 0
+const layoutOpts = (collapsed = [], over = {}) => ({
+    collapsed: new Set(collapsed),
+    rowHeight: 36,
+    laneHeight: 22,
+    plotWidth: 720,
+    msToPx: (ms) => ((ms - day(1)) / DAY_MS) * 20,
+    labelFontSize: 11,
+    barColor: () => '#89b4fa',
+    ...over
+});
+describe('buildGanttTree', () => {
+    const items = [
+        mkItem(0, 'Research', 1, 5, 'Discovery'),
+        mkItem(1, 'Spec', 5, 9, 'Discovery'),
+        mkItem(2, 'Backend', 9, 20, 'Build')
+    ];
+    it('is an identity transform when grouping is off', () => {
+        const tree = buildGanttTree(items, false);
+        expect(tree).toHaveLength(3);
+        expect(tree.every((node) => node.kind === 'leaf')).toBe(true);
+    });
+    it('groups tasks by section in first-appearance order', () => {
+        const tree = buildGanttTree(items, true);
+        expect(tree.map((node) => (node.kind === 'group' ? node.section : '?'))).toEqual([
+            'Discovery',
+            'Build'
+        ]);
+        expect(tree[0].kind === 'group' && tree[0].children).toHaveLength(2);
+    });
+    it('folds an interleaved section into one group rather than repeating it', () => {
+        const interleaved = [
+            mkItem(0, 'A', 1, 5, 'One'),
+            mkItem(1, 'B', 5, 9, 'Two'),
+            mkItem(2, 'C', 9, 12, 'One')
+        ];
+        const tree = buildGanttTree(interleaved, true);
+        expect(tree).toHaveLength(2);
+        expect(tree[0].kind === 'group' && tree[0].leaves).toEqual([0, 2]);
+    });
+    it('leaves sectionless tasks as top-level rows', () => {
+        const mixed = [mkItem(0, 'Loose', 1, 5), mkItem(1, 'Grouped', 5, 9, 'Build')];
+        const tree = buildGanttTree(mixed, true);
+        expect(tree[0].kind).toBe('leaf');
+        expect(tree[1].kind).toBe('group');
+    });
+});
+describe('rollUpGanttGroup', () => {
+    it('returns null for an empty group', () => {
+        expect(rollUpGanttGroup([])).toBeNull();
+    });
+    it('spans from the earliest start to the latest end', () => {
+        const rolled = rollUpGanttGroup([mkItem(0, 'A', 5, 9), mkItem(1, 'B', 1, 7)]);
+        expect(rolled?.startMs).toBe(day(1));
+        expect(rolled?.endMs).toBe(day(9));
+    });
+    it('weights progress by duration', () => {
+        // 8 days at 100% and 2 days at 0% ⇒ 80%
+        const rolled = rollUpGanttGroup([
+            mkItem(0, 'Long', 1, 9, undefined, { progress: 100 }),
+            mkItem(1, 'Short', 9, 11, undefined, { progress: 0 })
+        ]);
+        expect(rolled?.progress).toBe(80);
+    });
+    // a zero-length milestone would otherwise contribute no weight at all
+    it('gives a milestone a full day of weight', () => {
+        const rolled = rollUpGanttGroup([
+            mkItem(0, 'Task', 1, 2, undefined, { progress: 100 }),
+            mkItem(1, 'Gate', 3, 3, undefined, { progress: 0, milestone: true })
+        ]);
+        expect(rolled?.progress).toBe(50);
+    });
+    it('leaves progress unset when no child reports any', () => {
+        expect(rollUpGanttGroup([mkItem(0, 'A', 1, 5)])?.progress).toBeUndefined();
+    });
+    it('stays a milestone when every child is one on the same day', () => {
+        const rolled = rollUpGanttGroup([
+            mkItem(0, 'A', 4, 4, undefined, { milestone: true }),
+            mkItem(1, 'B', 4, 4, undefined, { milestone: true })
+        ]);
+        expect(rolled?.milestone).toBe(true);
+    });
+});
+describe('layoutGanttRows', () => {
+    const items = [
+        mkItem(0, 'Research', 1, 5, 'Discovery'),
+        mkItem(1, 'Spec', 6, 10, 'Discovery'),
+        mkItem(2, 'Backend', 11, 20, 'Build')
+    ];
+    it('stacks ungrouped tasks at a constant row height', () => {
+        const { rows, totalHeight } = layoutGanttRows(buildGanttTree(items, false), layoutOpts());
+        expect(rows.map((row) => row.y)).toEqual([0, 36, 72]);
+        expect(rows.every((row) => row.kind === 'task')).toBe(true);
+        expect(totalHeight).toBe(108);
+    });
+    it('gives an expanded group a header row above its children', () => {
+        const { rows } = layoutGanttRows(buildGanttTree(items, true), layoutOpts());
+        expect(rows.map((row) => row.kind)).toEqual([
+            'group-header',
+            'task',
+            'task',
+            'group-header',
+            'task'
+        ]);
+        expect(rows[0].lanes[0].bar.summary).toBe(true);
+        expect(rows[1].depth).toBe(1);
+    });
+    it('draws the whole group span on the header bar', () => {
+        const { rows } = layoutGanttRows(buildGanttTree(items, true), layoutOpts());
+        expect(rows[0].lanes[0].bar.startMs).toBe(day(1));
+        expect(rows[0].lanes[0].bar.endMs).toBe(day(10));
+    });
+    it('packs a collapsed group onto one row and keeps every child visible', () => {
+        const { rows } = layoutGanttRows(buildGanttTree(items, true), layoutOpts(['Discovery']));
+        const collapsed = rows[0];
+        expect(collapsed.kind).toBe('group-collapsed');
+        expect(collapsed.lanes).toHaveLength(2);
+        expect(collapsed.height).toBe(collapsed.laneCount * 22);
+    });
+    it('moves labels onto the bars only inside a collapsed group', () => {
+        const expanded = layoutGanttRows(buildGanttTree(items, true), layoutOpts());
+        expect(expanded.rows.every((row) => row.lanes.every((l) => l.label.placement === 'none'))).toBe(true);
+        const collapsed = layoutGanttRows(buildGanttTree(items, true), layoutOpts(['Discovery']));
+        expect(collapsed.rows[0].lanes.every((l) => l.label.placement !== 'none')).toBe(true);
+    });
+    it('is always shorter collapsed than expanded', () => {
+        const expanded = layoutGanttRows(buildGanttTree(items, true), layoutOpts());
+        const collapsed = layoutGanttRows(buildGanttTree(items, true), layoutOpts(['Discovery', 'Build']));
+        expect(collapsed.totalHeight).toBeLessThan(expanded.totalHeight);
+    });
+    it('spends one lane per overlapping child', () => {
+        const overlapping = [
+            mkItem(0, 'A', 1, 30, 'Build'),
+            mkItem(1, 'B', 2, 31, 'Build'),
+            mkItem(2, 'C', 3, 32, 'Build')
+        ];
+        const { rows } = layoutGanttRows(buildGanttTree(overlapping, true), layoutOpts(['Build']));
+        expect(rows[0].laneCount).toBe(3);
+    });
+    it('keeps text off a bar whose colour it cannot measure', () => {
+        const { rows } = layoutGanttRows(buildGanttTree(items, true), layoutOpts(['Discovery'], { barColor: () => 'rebeccapurple' }));
+        expect(rows[0].lanes.every((l) => l.label.placement !== 'inside')).toBe(true);
+    });
+});
+// --- dependency arrows ------------------------------------------------------
+describe('buildGanttAnchorMap', () => {
+    const items = [
+        mkItem(0, 'Research', 1, 5, 'Discovery'),
+        mkItem(1, 'Spec', 6, 10, 'Discovery')
+    ];
+    it('anchors each task to its own row when everything is expanded', () => {
+        const { rows } = layoutGanttRows(buildGanttTree(items, true), layoutOpts());
+        const anchors = buildGanttAnchorMap(rows);
+        expect(anchors.get(0)?.rowIndex).toBe(1);
+        expect(anchors.get(1)?.rowIndex).toBe(2);
+    });
+    it('anchors every child of a collapsed group to the one row that replaces them', () => {
+        const { rows } = layoutGanttRows(buildGanttTree(items, true), layoutOpts(['Discovery']));
+        const anchors = buildGanttAnchorMap(rows);
+        expect(anchors.get(0)?.rowIndex).toBe(0);
+        expect(anchors.get(1)?.rowIndex).toBe(0);
+        // the two tasks don't overlap, so they share a lane and keep their own dates
+        expect(anchors.get(0)?.endMs).toBe(day(5));
+        expect(anchors.get(1)?.startMs).toBe(day(6));
+    });
+    it('separates overlapping children onto their own lanes of that row', () => {
+        const overlapping = [mkItem(0, 'A', 1, 30, 'Build'), mkItem(1, 'B', 2, 31, 'Build')];
+        const { rows } = layoutGanttRows(buildGanttTree(overlapping, true), layoutOpts(['Build']));
+        const anchors = buildGanttAnchorMap(rows);
+        expect(anchors.get(0)?.rowIndex).toBe(anchors.get(1)?.rowIndex);
+        expect(anchors.get(0)?.lane).not.toBe(anchors.get(1)?.lane);
+    });
+});
+describe('resolveGanttArrows', () => {
+    const geom = { x: (ms) => ms / DAY_MS, rowY: (row, lane) => row * 100 + lane };
+    const anchor = (rowIndex, lane, over = {}) => ({
+        rowIndex,
+        lane,
+        startMs: day(1),
+        endMs: day(5),
+        milestone: false,
+        ...over
+    });
+    it('keeps one arrow per pair of distinct endpoints', () => {
+        const anchors = new Map([
+            [0, anchor(0, 0)],
+            [1, anchor(1, 0)]
+        ]);
+        const arrows = resolveGanttArrows([{ fromTask: 0, toTask: 1, depKey: 'a' }], anchors, geom);
+        expect(arrows).toHaveLength(1);
+        expect(arrows[0].y1).toBe(0);
+        expect(arrows[0].y2).toBe(100);
+    });
+    it('drops an edge whose ends collapse onto the same bar', () => {
+        const anchors = new Map([
+            [0, anchor(0, 0)],
+            [1, anchor(0, 0)]
+        ]);
+        expect(resolveGanttArrows([{ fromTask: 0, toTask: 1, depKey: 'a' }], anchors, geom)).toEqual([]);
+    });
+    it('keeps an edge between two lanes of the same collapsed row', () => {
+        const anchors = new Map([
+            [0, anchor(0, 0)],
+            [1, anchor(0, 1)]
+        ]);
+        expect(resolveGanttArrows([{ fromTask: 0, toTask: 1, depKey: 'a' }], anchors, geom)).toHaveLength(1);
+    });
+    it('collapses many edges between the same two rows into one arrow', () => {
+        const anchors = new Map([
+            [0, anchor(0, 0)],
+            [1, anchor(0, 0)],
+            [2, anchor(1, 0)],
+            [3, anchor(1, 0)]
+        ]);
+        const arrows = resolveGanttArrows([
+            { fromTask: 0, toTask: 2, depKey: 'a' },
+            { fromTask: 0, toTask: 3, depKey: 'b' },
+            { fromTask: 1, toTask: 2, depKey: 'c' }
+        ], anchors, geom);
+        expect(arrows).toHaveLength(1);
+    });
+    it('skips references it cannot resolve', () => {
+        const anchors = new Map([[0, anchor(0, 0)]]);
+        expect(resolveGanttArrows([{ fromTask: 0, toTask: 9, depKey: 'a' }], anchors, geom)).toEqual([]);
+    });
+    // only reachable at depth ≥ 2, where a collapsed group packs another group
+    it('takes its x coordinates from the rolled-up span of a stand-in bar', () => {
+        const rows = [
+            {
+                key: 'g:Outer',
+                kind: 'group-collapsed',
+                depth: 0,
+                label: 'Outer',
+                y: 0,
+                height: 22,
+                laneCount: 1,
+                collapsed: true,
+                section: 'Outer',
+                lanes: [
+                    {
+                        lane: 0,
+                        barX: 0,
+                        barWidth: 100,
+                        label: { placement: 'none', maxWidth: 0, width: 0, truncated: false },
+                        bar: {
+                            key: 'g:Inner:roll',
+                            label: 'Inner',
+                            startMs: day(1),
+                            endMs: day(30),
+                            milestone: false,
+                            taskIndex: -1,
+                            covers: [7, 8],
+                            summary: true
+                        }
+                    }
+                ]
+            }
+        ];
+        const anchors = buildGanttAnchorMap(rows);
+        anchors.set(9, anchor(1, 0, { startMs: day(40) }));
+        const arrows = resolveGanttArrows([{ fromTask: 7, toTask: 9, depKey: 'x' }], anchors, geom);
+        // the hidden task ends on day 5, but the bar that stands in for it runs to day 30
+        expect(arrows[0].x1).toBe(day(30) / DAY_MS);
+    });
+    it('meets a milestone at its vertex rather than its centre', () => {
+        const anchors = new Map([
+            [0, anchor(0, 0, { milestone: true })],
+            [1, anchor(1, 0)]
+        ]);
+        const arrows = resolveGanttArrows([{ fromTask: 0, toTask: 1, depKey: 'a' }], anchors, geom);
+        expect(arrows[0].x1).toBe(day(5) / DAY_MS + 7);
     });
 });

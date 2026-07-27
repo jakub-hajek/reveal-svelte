@@ -5,8 +5,13 @@ type $$ComponentProps = {
     locale?: string;
     otherLabel?: string;
     dependencies?: boolean;
+    groups?: boolean;
+    collapsed?: boolean | string[];
+    legend?: boolean;
     width?: number;
     rowHeight?: number;
+    laneHeight?: number;
+    barLabelSize?: number;
     labelWidth?: number;
     class?: string;
 };

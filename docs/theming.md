@@ -38,6 +38,12 @@ names, so overriding one token updates everything downstream.
 | `--theme-code-*` (`bg`, `text`, `keyword`, `string`, `number`, `comment`, `function`) | — | Code blocks |
 | `--theme-chart-1` … `--theme-chart-12` | `#f38ba8`, `#89b4fa`, `#a6e3a1`, … | Chart series, Gantt sections |
 | `--gantt-dependency-color` | falls back to `--theme-muted` | `GanttChart` dependency arrows |
+| `--gantt-group-label-color` | falls back to `--theme-text` | `GanttChart` group header text |
+| `--gantt-disclosure-color` | falls back to `--theme-muted` | Group expand/collapse triangle |
+| `--gantt-group-indent` | `12px` | How far a grouped task is indented in the gutter |
+| `--gantt-bar-label-light` / `--gantt-bar-label-dark` | `#ffffff` / `#11111b` | The two inks for labels drawn on bars; which one is used is decided per bar by luminance |
+| `--gantt-bar-label-outside-color` | falls back to `--theme-text` | Labels drawn beside a bar, on the slide |
+| `--gantt-bar-thickness` | `78%` | Bar height inside a collapsed group row |
 
 Override per deck or per slide:
 

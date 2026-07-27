@@ -258,9 +258,10 @@ re-exports of the Chart.js types.
 
 ### GanttChart
 
-Project timeline / roadmap: pure SVG, no Chart.js. Tasks in the same `section`
-share a color and get a legend entry; a task without `end` renders as a
-milestone diamond.
+Project timeline / roadmap: absolutely positioned elements with an SVG overlay
+for the dependency arrows — no Chart.js. Tasks in the same `section` share a
+color and get a legend entry; a task without `end` renders as a milestone
+diamond. With `groups`, sections become collapsible rows.
 
 ```svelte
 <script lang="ts">
@@ -283,8 +284,13 @@ milestone diamond.
 | `locale` | `string` | browser locale | BCP 47 tag for axis labels and tooltips (`'cs-CZ'`) |
 | `otherLabel` | `string` | per locale | Legend label for tasks with no `section` (cs → "Ostatní", else "Other") |
 | `dependencies` | `boolean` | `true` | `false` keeps the `dependsOn` data but hides the arrows |
+| `groups` | `boolean` | `false` | Promotes each `section` to a collapsible group row |
+| `collapsed` | `boolean \| string[]` | `false` | Groups collapsed on first render (`true` = all); clicks take over afterwards |
+| `legend` | `boolean` | auto | Forces the legend on/off; auto = shown only when there are 2+ sections and `groups` is off |
 | `width` | `number` | `900` | Total width in pixels |
 | `rowHeight` | `number` | `36` | Row height in pixels |
+| `laneHeight` | `number` | `max(20, rowHeight × 0.6)` | Height of one packed sub-lane inside a collapsed group |
+| `barLabelSize` | `number` | `11` | Font size (px) of labels drawn on or beside bars |
 | `labelWidth` | `number` | `180` | Width of the left-hand label column |
 | `class` | `string` | `''` | CSS class |
 
@@ -297,7 +303,7 @@ milestone diamond.
 | `end` | `string \| Date` | Omit for a milestone |
 | `id` | `string` | Stable key for `dependsOn`; defaults to `label` |
 | `dependsOn` | `string \| string[]` | Predecessor `id`(s) or `label`(s) — draws finish-to-start arrows |
-| `section` | `string` | Groups rows: one theme color per section, plus a legend entry |
+| `section` | `string` | Groups rows: one theme color per section, plus a legend entry — and the collapse key when `groups` is set |
 | `progress` | `number` | 0–100; renders a solid fill over a translucent track |
 | `color` | `string` | Overrides the section color for this row |
 | `milestone` | `boolean` | Forces a diamond even when `end` is set |
@@ -317,6 +323,36 @@ Unknown and self references are skipped silently. Recolor them with the
 	section { --gantt-dependency-color: var(--ctp-lavender); }
 </style>
 ```
+
+**Groups.** With `groups`, each `section` gets a header row whose label is a
+disclosure button — click it, or focus it and press Enter or Space. (The key
+event is stopped so it doesn't also advance the slide.) The header carries a
+faint bar spanning the whole group, and its progress is the duration-weighted
+average of its tasks.
+
+Collapsing does not hide anything. The group's tasks are packed onto as few
+sub-lanes as their dates allow — tasks that don't overlap in time share a lane —
+and each task's label moves onto its own bar, since the left gutter now shows
+only the group name. A five-task group with no overlaps collapses to one lane;
+in the worst case it is still a row shorter than it was expanded.
+
+Label placement is chosen per bar: inside when it fits, otherwise to the right,
+and to the left when the bar runs to the edge of the plot. Labels are clamped to
+the space available and ellipsized, and the bar's hover tooltip always carries
+the full text. Ink is picked by luminance against the bar, so it stays readable
+on both pastel and near-black palettes — but a `color` that is neither hex nor
+`rgb()` (a named color, `hsl()`, `var()`) can't be measured, so its label is
+placed beside the bar rather than on it.
+
+```svelte
+<GanttChart {tasks} groups collapsed={['Build']} />
+```
+
+Collapsing changes the chart's height mid-slide, so it asks `RevealWrapper` to
+re-run autofit. Dependency arrows are re-anchored to whatever rows are actually
+drawn: arrows into a collapsed group land on the task's own bar, several arrows
+that collapse onto the same pair of bars become one, and an arrow between two
+tasks that end up on the same bar disappears.
 
 ---
 

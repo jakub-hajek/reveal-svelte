@@ -66,11 +66,15 @@
 		// Leaving overview clears all inline slide transforms — re-apply autofit scaling.
 		revealInstance.on('overviewhidden', runAutoFit);
 		window.addEventListener('resize', runAutoFit);
+		// Components that change height in place (e.g. collapsing a GanttChart group)
+		// ask for a re-fit; nothing else notices a slide growing mid-slide.
+		revealElement?.addEventListener('reveal-svelte:refit', runAutoFit);
 	});
 
 	onDestroy(() => {
 		if (typeof window !== 'undefined') {
 			window.removeEventListener('resize', runAutoFit);
+			revealElement?.removeEventListener('reveal-svelte:refit', runAutoFit);
 		}
 		if (revealInstance) {
 			revealInstance.off('slidechanged', runAutoFit);
