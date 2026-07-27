@@ -184,6 +184,19 @@ describe('GanttChart groups', () => {
             { row: '44px', band: '22px' }
         ]);
     });
+    // a task with no section sits alongside the group headings, so it is marked
+    // as a peer of them rather than as a child of one
+    it('marks a sectionless task as a root row', () => {
+        const mixed = [
+            ...grouped,
+            { label: 'Budget review', start: '2026-02-02', end: '2026-02-27' }
+        ];
+        const { container } = render(GanttChart, { props: { tasks: mixed, groups: true } });
+        const roots = [...container.querySelectorAll('.gantt-label.is-root')].map((el) => el.textContent?.trim());
+        expect(roots).toEqual(['Budget review']);
+        // and it has no disclosure triangle, since there is nothing to expand
+        expect(container.querySelector('.gantt-label.is-root .gantt-disclosure')).toBeNull();
+    });
     it('keeps the gutter and the plot on the same number of rows', () => {
         const { container } = render(GanttChart, {
             props: { tasks: grouped, groups: true, collapsed: ['Build'] }

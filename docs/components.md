@@ -328,8 +328,11 @@ Unknown and self references are skipped silently. Recolor them with the
 disclosure button — click it, or focus it and press Enter or Space. (The key
 event is stopped so it doesn't also advance the slide.) The gutter switches from
 right-aligned to an outline: rows sit flush left and indent one
-`--gantt-group-indent` step per level. Charts without `groups` keep their labels
-tucked against the axis. The header carries a
+`--gantt-group-indent` step per level. The triangle hangs in its own gutter, so a
+task with no `section` — a peer of the group headings rather than a child of one
+— lines its name up with theirs and is emboldened to match, just without a
+triangle of its own. Charts without `groups` keep their labels tucked against the
+axis. The header carries a
 faint bar spanning the whole group, and its progress is the duration-weighted
 average of its tasks.
 

@@ -338,6 +338,7 @@
 					{#if row.kind === 'task'}
 						<div
 							class="gantt-label"
+							class:is-root={row.depth === 0}
 							style="--gantt-row-h: {row.height}px; --gantt-depth: {row.depth};"
 							title={row.label}
 						>
@@ -526,7 +527,29 @@
 	.has-groups .gantt-label,
 	.has-groups .gantt-group-toggle {
 		text-align: left;
+	}
+
+	.has-groups .gantt-group-toggle {
 		padding-left: calc(var(--gantt-group-indent, 14px) * var(--gantt-depth, 0));
+	}
+
+	/*
+	 * The disclosure triangle hangs in its own gutter, so a task's text and a
+	 * group's name start on the same column at the same depth instead of the
+	 * task sliding left into the space the triangle would have used.
+	 */
+	.has-groups .gantt-label {
+		padding-left: calc(
+			var(--gantt-group-indent, 14px) * var(--gantt-depth, 0) +
+				var(--gantt-disclosure-slot, 11px)
+		);
+	}
+
+	/* a task with no section is a peer of the group headings, so it reads like
+	   one — just with nothing to expand */
+	.has-groups .gantt-label.is-root {
+		font-weight: 600;
+		color: var(--gantt-group-label-color, var(--theme-text, #333));
 	}
 
 	.has-groups .gantt-group-toggle-inner {

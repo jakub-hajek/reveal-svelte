@@ -41,6 +41,7 @@ names, so overriding one token updates everything downstream.
 | `--gantt-group-label-color` | falls back to `--theme-text` | `GanttChart` group header text |
 | `--gantt-disclosure-color` | falls back to `--theme-muted` | Group expand/collapse triangle |
 | `--gantt-group-indent` | `14px` | Indent per tree level in a grouped chart's gutter |
+| `--gantt-disclosure-slot` | `11px` | Width reserved for the expand/collapse triangle, so labels without one still line up |
 | `--gantt-bar-label-light` / `--gantt-bar-label-dark` | `#ffffff` / `#11111b` | The two inks for labels drawn on bars; which one is used is decided per bar by luminance |
 | `--gantt-bar-label-outside-color` | falls back to `--theme-text` | Labels drawn beside a bar, on the slide |
 | `--gantt-bar-thickness` | `62%` | Bar height as a share of its lane |
