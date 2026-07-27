@@ -168,6 +168,22 @@ describe('GanttChart groups', () => {
         expect(banded.map((el) => el.style.height)).toEqual(['22px', '22px']);
         expect(new Set(banded.map((el) => el.style.top)).size).toBe(2);
     });
+    // a tall collapsed row reads as a heading over its bars, so its name sits on
+    // the first lane rather than floating on the row's centre line
+    it('sizes a group label to its first lane, not the whole row', () => {
+        const { container } = render(GanttChart, {
+            props: { tasks: grouped, groups: true, collapsed: ['Build'], rowHeight: 40, laneHeight: 22 }
+        });
+        const bands = [...container.querySelectorAll('.gantt-group-label')].map((el) => ({
+            row: el.style.getPropertyValue('--gantt-row-h').trim(),
+            band: el.style.getPropertyValue('--gantt-band-h').trim()
+        }));
+        // Discovery is expanded (one full-height lane); Build is collapsed onto two
+        expect(bands).toEqual([
+            { row: '40px', band: '40px' },
+            { row: '44px', band: '22px' }
+        ]);
+    });
     it('keeps the gutter and the plot on the same number of rows', () => {
         const { container } = render(GanttChart, {
             props: { tasks: grouped, groups: true, collapsed: ['Build'] }

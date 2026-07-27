@@ -341,7 +341,10 @@
 					{:else}
 						<div
 							class="gantt-group-label"
-							style="--gantt-row-h: {row.height}px; --gantt-depth: {row.depth};"
+							style="--gantt-row-h: {row.height}px; --gantt-depth: {row.depth}; --gantt-band-h: {laneBand(
+								row,
+								0
+							).height}px;"
 						>
 							<button
 								type="button"
@@ -352,8 +355,12 @@
 								onclick={(event) => event.detail > 0 && toggle(row.section)}
 								onkeydown={onToggleKey(row.section)}
 							>
-								<span class="gantt-disclosure" aria-hidden="true"></span>
-								<span class="gantt-group-name">{row.label}</span>
+								<!-- sits in the row's first lane, not its middle, so a tall
+								     collapsed group reads as a heading over its bars -->
+								<span class="gantt-group-toggle-inner">
+									<span class="gantt-disclosure" aria-hidden="true"></span>
+									<span class="gantt-group-name">{row.label}</span>
+								</span>
 							</button>
 						</div>
 					{/if}
@@ -517,8 +524,18 @@
 		padding-left: calc(var(--gantt-group-indent, 14px) * var(--gantt-depth, 0));
 	}
 
-	.has-groups .gantt-group-toggle {
+	.has-groups .gantt-group-toggle-inner {
 		justify-content: flex-start;
+	}
+
+	.gantt-group-toggle-inner {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 6px;
+		width: 100%;
+		min-width: 0;
+		height: var(--gantt-band-h, var(--gantt-row-h, var(--gantt-row-height)));
 	}
 
 	.gantt-group-label {
@@ -526,10 +543,12 @@
 	}
 
 	.gantt-group-toggle {
+		/* explicitly flex-start: a button otherwise centres its content vertically
+		   through an anonymous UA box that `display: block` does not override */
 		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 6px;
+		align-items: flex-start;
+		/* full height so the whole row stays clickable, even though the label
+		   itself only occupies the first lane */
 		width: 100%;
 		height: 100%;
 		/* reset explicitly — `all: unset` would drop the box model and break row alignment */
