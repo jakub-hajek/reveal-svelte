@@ -214,20 +214,26 @@ describe('GanttChart groups', () => {
         const { container } = render(GanttChart, {
             props: { tasks: grouped, groups: true, collapsed: true }
         });
+        const tones = ['is-ink-light', 'is-ink-dark', 'is-ink-outside'];
         for (const label of container.querySelectorAll('.gantt-bar-label')) {
             expect(label.style.color).not.toBe('');
-            expect(label.classList.contains('is-ink-light') || label.classList.contains('is-ink-dark'))
-                .toBe(true);
+            expect(tones.filter((tone) => label.classList.contains(tone))).toHaveLength(1);
         }
     });
-    it('keeps text off a bar whose colour it cannot measure', () => {
+    // a label beside a bar sits on the slide, where gridlines and arrows cross it,
+    // so it takes the slide's ink and a background halo rather than the bar's
+    it('places the label beside a bar whose colour it cannot measure', () => {
         const unmeasurable = [
-            { label: 'Audit', start: '2026-01-05', end: '2026-06-30', section: 'Build', color: 'rebeccapurple' }
+            { label: 'Audit', start: '2026-02-02', end: '2026-02-27', section: 'Build', color: 'rebeccapurple' },
+            { label: 'Rollout', start: '2026-05-04', end: '2026-06-30', section: 'Build' }
         ];
         const { container } = render(GanttChart, {
             props: { tasks: unmeasurable, groups: true, collapsed: true }
         });
-        expect(container.querySelector('.gantt-bar-label.is-inside')).toBeNull();
+        const audit = [...container.querySelectorAll('.gantt-bar-label')].find((el) => el.textContent?.trim() === 'Audit');
+        expect(audit).toBeDefined();
+        expect(audit?.classList.contains('is-inside')).toBe(false);
+        expect(audit?.classList.contains('is-ink-outside')).toBe(true);
     });
     it('keeps the arrow count stable when a group collapses', () => {
         const linked = [

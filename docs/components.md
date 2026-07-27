@@ -352,7 +352,15 @@ Collapsing changes the chart's height mid-slide, so it asks `RevealWrapper` to
 re-run autofit. Dependency arrows are re-anchored to whatever rows are actually
 drawn: arrows into a collapsed group land on the task's own bar, several arrows
 that collapse onto the same pair of bars become one, and an arrow between two
-tasks that end up on the same bar disappears.
+tasks that end up on the same bar disappears — two tasks that share a lane read
+as sequential already, so the connector between them is redundant.
+
+Lane packing reserves horizontal room for each label, but arrow routing doesn't:
+a connector leaves a bar at its lane's vertical centre, which is exactly where a
+label placed beside that bar sits. A long label on a bar that also has an
+outgoing dependency will collect a line through it. Keep labels short in charts
+that combine `groups` with `dependsOn`, or hide the arrows with
+`dependencies={false}` where the timing, not the hand-off, is the point.
 
 ---
 

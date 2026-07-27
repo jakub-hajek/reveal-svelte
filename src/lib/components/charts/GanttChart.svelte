@@ -407,6 +407,7 @@
 											class="gantt-bar-label is-{lane.label.placement}"
 											class:is-ink-light={ink.tone === 'light'}
 											class:is-ink-dark={ink.tone === 'dark'}
+											class:is-ink-outside={ink.tone === 'outside'}
 											style="{labelStyle(lane)} color: {ink.color};"
 										>
 											{bar.label}
@@ -670,6 +671,12 @@
 		position: absolute;
 		top: 50%;
 		transform: translateY(-50%);
+		/*
+		 * Above the arrow overlay, which is painted later. A dependency leaving a
+		 * bar exits at the lane's vertical centre — exactly where a label placed
+		 * beside that bar sits — and would otherwise strike through the text.
+		 */
+		z-index: 1;
 		font-size: var(--gantt-bar-label-size, 11px);
 		font-weight: 500;
 		line-height: 1;
@@ -693,17 +700,24 @@
 		text-shadow: 0 1px 2px rgb(255 255 255 / 0.55);
 	}
 
-	.gantt-lane {
-		animation: gantt-lane-in 140ms ease-out;
+	/*
+	 * A label beside a bar sits on the slide, where gridlines and dependency
+	 * connectors run straight through the gaps between its letters. Knock a halo
+	 * of the slide's own background out around the glyphs.
+	 */
+	.gantt-bar-label.is-ink-outside {
+		text-shadow:
+			0 0 3px var(--theme-bg, #1e1e2e),
+			0 0 3px var(--theme-bg, #1e1e2e),
+			0 0 2px var(--theme-bg, #1e1e2e);
 	}
 
-	@keyframes gantt-lane-in {
-		from {
-			opacity: 0;
-			transform: translateY(-2px);
-		}
-	}
-
+	/*
+	 * Deliberately no entrance animation on `.gantt-lane`: animating opacity or
+	 * transform would make it a stacking context, trapping `.gantt-bar-label`'s
+	 * z-index inside the lane so labels could never paint above the arrow
+	 * overlay. Toggling reads fine on the arrow blink alone.
+	 */
 	.gantt-arrows {
 		transition: opacity 120ms ease;
 	}
@@ -713,10 +727,6 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.gantt-lane {
-			animation: none;
-		}
-
 		.gantt-arrows,
 		.gantt-disclosure {
 			transition: none;
