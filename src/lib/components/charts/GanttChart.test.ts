@@ -79,6 +79,46 @@ describe('GanttChart component', () => {
 		expect(container.querySelectorAll('.gantt-gridline').length).toBe(ticks.length);
 	});
 
+	it('draws an arrow for each resolved dependency', () => {
+		const linked: GanttTask[] = [
+			{ label: 'Design', start: '2026-01-05', end: '2026-01-30' },
+			{ label: 'Build', start: '2026-02-02', end: '2026-03-20', dependsOn: 'Design' },
+			{ label: 'Launch', start: '2026-03-27', dependsOn: ['Design', 'Build'] }
+		];
+		const { container } = render(GanttChart, { props: { tasks: linked } });
+		expect(container.querySelectorAll('.gantt-arrow-line').length).toBe(3);
+		expect(container.querySelectorAll('.gantt-arrow-head').length).toBe(3);
+	});
+
+	it('resolves dependencies by id when one is set', () => {
+		const linked: GanttTask[] = [
+			{ id: 'a', label: 'Design', start: '2026-01-05', end: '2026-01-30' },
+			{ id: 'b', label: 'Build', start: '2026-02-02', end: '2026-03-20', dependsOn: 'a' }
+		];
+		const { container } = render(GanttChart, { props: { tasks: linked } });
+		expect(container.querySelectorAll('.gantt-arrow-line').length).toBe(1);
+	});
+
+	it('ignores unknown and self references', () => {
+		const linked: GanttTask[] = [
+			{ label: 'Design', start: '2026-01-05', end: '2026-01-30', dependsOn: 'Design' },
+			{ label: 'Build', start: '2026-02-02', end: '2026-03-20', dependsOn: 'Nope' }
+		];
+		const { container } = render(GanttChart, { props: { tasks: linked } });
+		expect(container.querySelector('.gantt-arrows')).toBeNull();
+	});
+
+	it('hides arrows when dependencies is false', () => {
+		const linked: GanttTask[] = [
+			{ label: 'Design', start: '2026-01-05', end: '2026-01-30' },
+			{ label: 'Build', start: '2026-02-02', end: '2026-03-20', dependsOn: 'Design' }
+		];
+		const { container } = render(GanttChart, {
+			props: { tasks: linked, dependencies: false }
+		});
+		expect(container.querySelector('.gantt-arrows')).toBeNull();
+	});
+
 	it('renders nothing but the figure for an empty task list', () => {
 		const { container } = render(GanttChart, { props: { tasks: [] } });
 		expect(container.querySelector('.gantt-body')).toBeNull();

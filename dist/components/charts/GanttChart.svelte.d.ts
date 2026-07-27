@@ -4,6 +4,7 @@ type $$ComponentProps = {
     today?: boolean | string | Date;
     locale?: string;
     otherLabel?: string;
+    dependencies?: boolean;
     width?: number;
     rowHeight?: number;
     labelWidth?: number;

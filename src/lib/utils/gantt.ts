@@ -98,6 +98,46 @@ function makeLabeler(unit: GanttTimeUnit, locale?: string): (ms: number, index: 
 	};
 }
 
+/** Half-width of the arrow head, in px; the connector line stops here. */
+export const GANTT_ARROW_HEAD = 7;
+/** Length of the straight stub leaving a bar before the connector turns. */
+const ARROW_STUB = 10;
+
+/**
+ * Orthogonal finish-to-start connector from (x1, y1) — the predecessor's end —
+ * to (x2, y2) — the successor's start. Coordinates are px inside the plot
+ * canvas. The line stops short of x2 to leave room for the arrow head.
+ */
+export function ganttDependencyPath(
+	x1: number,
+	y1: number,
+	x2: number,
+	y2: number,
+	rowHeight: number
+): string {
+	const tip = x2 - GANTT_ARROW_HEAD;
+	const round = (n: number) => Math.round(n * 100) / 100;
+
+	if (tip - x1 >= ARROW_STUB) {
+		const elbow = Math.max(x1, tip - ARROW_STUB);
+		return `M ${round(x1)} ${round(y1)} H ${round(elbow)} V ${round(y2)} H ${round(tip)}`;
+	}
+
+	// successor starts at or before the predecessor's end: route around the rows
+	const lane = y1 + (y2 >= y1 ? rowHeight / 2 : -rowHeight / 2);
+	return (
+		`M ${round(x1)} ${round(y1)} H ${round(x1 + ARROW_STUB)} V ${round(lane)} ` +
+		`H ${round(tip - ARROW_STUB)} V ${round(y2)} H ${round(tip)}`
+	);
+}
+
+/** Filled triangle pointing right, with its tip at (x, y). */
+export function ganttArrowHead(x: number, y: number): string {
+	const round = (n: number) => Math.round(n * 100) / 100;
+	const back = round(x - GANTT_ARROW_HEAD);
+	return `M ${round(x)} ${round(y)} L ${back} ${round(y - 4.5)} L ${back} ${round(y + 4.5)} Z`;
+}
+
 export function computeGanttScale(startMs: number, endMs: number, locale?: string): GanttScale {
 	const end = endMs > startMs ? endMs : startMs + DAY_MS;
 	const unit = pickUnit((end - startMs) / DAY_MS);

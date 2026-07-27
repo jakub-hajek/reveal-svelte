@@ -12,6 +12,10 @@ export interface ChartProps {
 
 export interface GanttTask {
 	label: string;
+	/** Stable key for `dependsOn` references; defaults to `label` */
+	id?: string;
+	/** `id` (or `label`) of the task(s) this one follows; draws finish-to-start arrows */
+	dependsOn?: string | string[];
 	/** ISO date string (e.g. '2026-03-01') or Date */
 	start: string | Date;
 	/** Omit for a milestone (single point in time) */
@@ -34,6 +38,8 @@ export interface GanttChartProps {
 	locale?: string;
 	/** Legend label for tasks without a section (defaults per locale: cs → 'Ostatní', otherwise 'Other') */
 	otherLabel?: string;
+	/** Set false to keep `dependsOn` data but hide the arrows */
+	dependencies?: boolean;
 	width?: number;
 	rowHeight?: number;
 	labelWidth?: number;

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { computeGanttScale, formatGanttDate, toUTCms } from './gantt';
+import {
+	computeGanttScale,
+	formatGanttDate,
+	ganttArrowHead,
+	ganttDependencyPath,
+	toUTCms
+} from './gantt';
 
 const DAY_MS = 86_400_000;
 
@@ -81,5 +87,34 @@ describe('computeGanttScale', () => {
 describe('formatGanttDate', () => {
 	it('formats a timestamp without timezone shifts', () => {
 		expect(formatGanttDate(Date.UTC(2026, 2, 1), 'en-US')).toBe('Mar 1, 2026');
+	});
+});
+
+describe('ganttDependencyPath', () => {
+	it('elbows once when the successor starts after the predecessor ends', () => {
+		const d = ganttDependencyPath(100, 18, 300, 54, 36);
+		// M x1 y1 → H elbow → V y2 → H tip
+		expect(d).toBe('M 100 18 H 283 V 54 H 293');
+	});
+
+	it('stops the line short of the target to leave room for the arrow head', () => {
+		const d = ganttDependencyPath(0, 18, 200, 54, 36);
+		expect(d.endsWith('H 193')).toBe(true);
+	});
+
+	it('routes around the rows when the successor starts before the predecessor ends', () => {
+		const d = ganttDependencyPath(300, 18, 120, 54, 36);
+		expect(d).toBe('M 300 18 H 310 V 36 H 103 V 54 H 113');
+	});
+
+	it('routes through the lane above when the successor sits on an earlier row', () => {
+		const d = ganttDependencyPath(300, 90, 120, 18, 36);
+		expect(d).toContain('V 72');
+	});
+});
+
+describe('ganttArrowHead', () => {
+	it('draws a closed triangle with its tip at the given point', () => {
+		expect(ganttArrowHead(200, 50)).toBe('M 200 50 L 193 45.5 L 193 54.5 Z');
 	});
 });

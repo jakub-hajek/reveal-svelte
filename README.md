@@ -67,8 +67,8 @@ Theme-aware project timeline with no chart.js dependency. Tasks in the same
 
 	const tasks: GanttTask[] = [
 		{ label: 'Design', start: '2026-01-05', end: '2026-01-30', section: 'Phase 1', progress: 80 },
-		{ label: 'Build', start: '2026-02-02', end: '2026-03-20', section: 'Phase 2', progress: 30 },
-		{ label: 'Launch', start: '2026-03-27', section: 'Phase 2' } // milestone
+		{ label: 'Build', start: '2026-02-02', end: '2026-03-20', section: 'Phase 2', progress: 30, dependsOn: 'Design' },
+		{ label: 'Launch', start: '2026-03-27', section: 'Phase 2', dependsOn: 'Build' } // milestone
 	];
 </script>
 
@@ -76,8 +76,23 @@ Theme-aware project timeline with no chart.js dependency. Tasks in the same
 ```
 
 Props: `tasks`, `today` (`true` = now, or a date), `locale`, `otherLabel`,
-`width`, `rowHeight`, `labelWidth`. The time axis picks day/week/month/quarter/year
-ticks automatically from the date range.
+`dependencies`, `width`, `rowHeight`, `labelWidth`. The time axis picks
+day/week/month/quarter/year ticks automatically from the date range.
+
+#### Dependencies
+
+`dependsOn` draws finish-to-start arrows from one task's end to another's start.
+It takes a single reference or an array, matched against a task's `id` — or, if
+no ids are used, its `label`:
+
+```ts
+{ id: 'build', label: 'Build', start: '2026-02-02', end: '2026-03-20', dependsOn: ['design', 'hiring'] }
+```
+
+Arrows route straight when the successor starts later and elbow around the rows
+when it starts earlier (an overlap). Unknown and self references are skipped.
+Set `dependencies={false}` to hide the arrows without removing the data, and
+restyle them with the `--gantt-dependency-color` CSS variable.
 
 Dates are localized via `Intl` — pass any BCP 47 tag (`locale="cs-CZ"` →
 "5. 1.", "bře 2026"; default is the browser locale). The legend label for
