@@ -279,25 +279,27 @@
 	}
 
 	/**
-	 * Placement is decided in px (see `resolveGanttLabel`) but painted in
-	 * percentages anchored to the bar, so the label tracks it exactly on resize
-	 * and an over-long estimate costs an ellipsis rather than an overlap.
+	 * The offset is painted in percentages anchored to the bar, so the label
+	 * tracks it exactly on resize. The width is the px `maxWidth` the layout
+	 * computed — the percentage the offset comes from would measure to the plot
+	 * edge, whereas a label beside a bar may only have the gap up to its neighbour
+	 * on the same lane. An over-long estimate then costs an ellipsis, never an
+	 * overlap.
 	 */
 	function labelStyle(lane: GanttLane): string {
 		const startPct = pct(lane.bar.startMs);
 		const endPct = lane.bar.milestone ? startPct : pct(lane.bar.endMs);
 		const edge = lane.bar.milestone ? GANTT_MILESTONE_HALF : 0;
 		const gap = LABEL_GAP_OUTSIDE + edge;
+		const width = `max-width: ${Math.round(lane.label.maxWidth * 100) / 100}px;`;
 
 		switch (lane.label.placement) {
 			case 'inside':
-				return `left: calc(${startPct}% + ${LABEL_PAD_INSIDE}px); max-width: calc(${
-					endPct - startPct
-				}% - ${LABEL_PAD_INSIDE * 2}px);`;
+				return `left: calc(${startPct}% + ${LABEL_PAD_INSIDE}px); ${width}`;
 			case 'right':
-				return `left: calc(${endPct}% + ${gap}px); max-width: calc(${100 - endPct}% - ${gap + LABEL_GAP_OUTSIDE}px);`;
+				return `left: calc(${endPct}% + ${gap}px); ${width}`;
 			case 'left':
-				return `left: calc(${startPct}% - ${gap}px); max-width: calc(${startPct}% - ${gap + LABEL_GAP_OUTSIDE}px);`;
+				return `left: calc(${startPct}% - ${gap}px); ${width}`;
 			default:
 				return '';
 		}
@@ -413,6 +415,7 @@
 										<div
 											class="gantt-bar"
 											class:is-summary={bar.summary}
+											class:abuts={lane.abuts}
 											style="left: {pct(bar.startMs)}%; width: {pct(bar.endMs) -
 												pct(bar.startMs)}%; background: {bar.progress != null
 												? `color-mix(in srgb, ${barColor(bar)} 30%, transparent)`
@@ -693,6 +696,25 @@
 		bottom: 0;
 		left: 0;
 		border-radius: 4px;
+	}
+
+	/*
+	 * A task collapsed onto the same lane as the one it follows shares its colour
+	 * and touches its edge, so the pair paints as one long bar. A hairline of the
+	 * slide's own background down the leading edge separates them for the cost of
+	 * a pixel — cheaper than the lane a real gap would have taken.
+	 *
+	 * Above `.gantt-progress`, which is a later sibling and would cover it.
+	 */
+	.gantt-bar.abuts::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		width: var(--gantt-bar-seam-width, 1px);
+		background: var(--gantt-bar-seam-color, var(--theme-bg, #1e1e2e));
+		z-index: 1;
 	}
 
 	.gantt-arrows {

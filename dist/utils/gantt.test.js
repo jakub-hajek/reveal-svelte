@@ -185,6 +185,27 @@ describe('resolveGanttLabel', () => {
     it('drops the label when the plot has no width yet', () => {
         expect(resolveGanttLabel({ ...base, text: 'A', barX: 0, barWidth: 0, plotWidth: 0 }).placement).toBe('none');
     });
+    it('measures the box beside the bar against the bounds, not the plot edge', () => {
+        const input = { ...base, text: 'Frontend', barX: 100, barWidth: 20 };
+        expect(resolveGanttLabel(input).maxWidth).toBe(720 - 120 - 12);
+        expect(resolveGanttLabel({ ...input, boundRight: 300 }).maxWidth).toBe(300 - 120 - 12);
+    });
+    it('gives up the right of the bar once the bound leaves no room there', () => {
+        const label = resolveGanttLabel({
+            ...base,
+            text: 'Frontend',
+            barX: 100,
+            barWidth: 20,
+            boundRight: 124
+        });
+        expect(label.placement).not.toBe('right');
+    });
+    it('measures the box left of the bar from boundLeft', () => {
+        const input = { ...base, text: 'Rollout', barX: 700, barWidth: 20 };
+        expect(resolveGanttLabel(input).placement).toBe('left');
+        expect(resolveGanttLabel(input).maxWidth).toBe(700 - 12);
+        expect(resolveGanttLabel({ ...input, boundLeft: 600 }).maxWidth).toBe(700 - 600 - 12);
+    });
 });
 describe('ganttBarExtent', () => {
     const plotWidth = 720;
@@ -508,6 +529,87 @@ describe('layoutGanttRows', () => {
         const { rows } = layoutGanttRows(buildGanttTree(overlapping, true), layoutOpts(['Build']));
         expect(rows[0].laneCount).toBe(3);
     });
+    // a label is not a reason to spend a lane: it can always truncate, and whether
+    // it even needs the room depends on the lane it would have been given
+    it('keeps back-to-back children on one lane however long their labels are', () => {
+        const consecutive = [
+            mkItem(0, 'Requirements analysis', 1, 4, 'Build'),
+            mkItem(1, 'Core implementation', 4, 7, 'Build'),
+            mkItem(2, 'Integration testing', 7, 10, 'Build')
+        ];
+        const { rows } = layoutGanttRows(buildGanttTree(consecutive, true), layoutOpts(['Build']));
+        expect(rows[0].laneCount).toBe(1);
+        expect(rows[0].lanes.map((lane) => lane.lane)).toEqual([0, 0, 0]);
+        expect(rows[0].lanes.every((lane) => lane.label.placement !== 'none')).toBe(true);
+    });
+    // however far it has to truncate, it stays on the lane the dates gave it
+    it('does not spend a lane on a label that can shorten instead', () => {
+        const laneCount = (labels) => {
+            const items = labels.map((label, i) => mkItem(i, label, 1 + i * 3, 4 + i * 3, 'Build'));
+            return layoutGanttRows(buildGanttTree(items, true), layoutOpts(['Build'])).rows[0].laneCount;
+        };
+        expect(laneCount(['A', 'B', 'C'])).toBe(1);
+        expect(laneCount(['A very long task label indeed', 'B', 'C'])).toBe(1);
+    });
+    // the exception, and the only one: shortening it is no longer an option
+    it('spends a lane on a label a neighbour would erase altogether', () => {
+        // the milestone has no bar to sit in, and its neighbours leave it no gap
+        const crowded = [
+            mkItem(0, 'Audit', 1, 5, 'Ship'),
+            mkItem(1, 'Go / no-go', 6, 6, 'Ship', { milestone: true }),
+            mkItem(2, 'Rollout', 7, 20, 'Ship')
+        ];
+        const { rows } = layoutGanttRows(buildGanttTree(crowded, true), layoutOpts(['Ship']));
+        expect(rows[0].laneCount).toBe(2);
+        const gate = rows[0].lanes.find((lane) => lane.bar.label === 'Go / no-go');
+        expect(gate?.label.placement).not.toBe('none');
+        // the lane it was given is its own; the other two still share the first
+        expect(rows[0].lanes.filter((lane) => lane.lane === gate?.lane)).toHaveLength(1);
+    });
+    // one gap between two narrow bars: the first wants it on its right, the second
+    // on its left, and only one of them may have it
+    it('never lets two labels on one lane claim the same gap', () => {
+        const items = [
+            mkItem(0, 'Discovery workshop', 1, 3, 'Build'),
+            // hard against the right edge, so its label has nowhere to go but left
+            mkItem(1, 'Launch retrospective', 12, 14, 'Build')
+        ];
+        const { rows } = layoutGanttRows(buildGanttTree(items, true), layoutOpts(['Build'], { plotWidth: 300 }));
+        expect(rows[0].laneCount).toBe(1);
+        expect(rows[0].lanes.map((lane) => lane.label.placement)).toEqual(['right', 'left']);
+        const boxes = rows[0].lanes.map((lane) => ganttBarExtent({ barX: lane.barX, barWidth: lane.barWidth, plotWidth: 300, milestone: lane.bar.milestone }, lane.label));
+        expect(boxes[0].endPx).toBeLessThanOrEqual(boxes[1].startPx);
+    });
+    // they share a lane and a section colour, so the seam is all that separates them
+    it('marks a child that starts where its lane-mate ended', () => {
+        const consecutive = [
+            mkItem(0, 'First', 1, 4, 'Build'),
+            mkItem(1, 'Second', 4, 7, 'Build'),
+            // a clear week later: a visible gap already, so no seam
+            mkItem(2, 'Third', 14, 17, 'Build')
+        ];
+        const { rows } = layoutGanttRows(buildGanttTree(consecutive, true), layoutOpts(['Build']));
+        expect(rows[0].laneCount).toBe(1);
+        expect(rows[0].lanes.map((lane) => lane.abuts)).toEqual([false, true, false]);
+    });
+    it('leaves a milestone unseamed and never seams an uncollapsed row', () => {
+        const items = [
+            mkItem(0, 'Freeze', 1, 4, 'Ship'),
+            mkItem(1, 'Gate', 4, 4, 'Ship', { milestone: true })
+        ];
+        const tree = buildGanttTree(items, true);
+        // the diamond has its own outline, so it needs no seam of its own
+        expect(layoutGanttRows(tree, layoutOpts(['Ship'])).rows[0].lanes.every((lane) => !lane.abuts)).toBe(true);
+        // expanded, every bar has a row to itself and nothing to abut
+        expect(layoutGanttRows(tree, layoutOpts([], { summaryBar: true })).rows.every((row) => row.lanes.every((lane) => !lane.abuts))).toBe(true);
+    });
+    it('splits adjacent children too narrow to paint side by side', () => {
+        const adjacent = [mkItem(0, 'A', 1, 2, 'Build'), mkItem(1, 'B', 2, 3, 'Build')];
+        // 1px per day: two 1px bars 1px apart, which `.gantt-bar`'s 4px minimum
+        // width paints on top of each other
+        const { rows } = layoutGanttRows(buildGanttTree(adjacent, true), layoutOpts(['Build'], { msToPx: (ms) => (ms - day(1)) / DAY_MS }));
+        expect(rows[0].lanes.map((lane) => lane.lane)).toEqual([0, 1]);
+    });
     it('keeps text off a bar whose colour it cannot measure', () => {
         const { rows } = layoutGanttRows(buildGanttTree(items, true), layoutOpts(['Discovery'], { barColor: () => 'rebeccapurple' }));
         expect(rows[0].lanes.every((l) => l.label.placement !== 'inside')).toBe(true);
@@ -612,6 +714,7 @@ describe('resolveGanttArrows', () => {
                         lane: 0,
                         barX: 0,
                         barWidth: 100,
+                        abuts: false,
                         label: { placement: 'none', maxWidth: 0, width: 0, truncated: false },
                         bar: {
                             key: 'g:Inner:roll',

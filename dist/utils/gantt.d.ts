@@ -47,6 +47,14 @@ export interface GanttLabelInput {
     milestone?: boolean;
     /** false when the bar colour can't be measured, so text must not sit on it */
     insideAllowed?: boolean;
+    /**
+     * px; leftmost edge a label placed *beside* the bar may reach — the end of
+     * whatever is drawn to its left on the same lane. Defaults to the plot's own
+     * left edge, which is right for a bar that has nothing beside it.
+     */
+    boundLeft?: number;
+    /** px; rightmost edge such a label may reach. Defaults to the plot's right edge. */
+    boundRight?: number;
 }
 export interface GanttLabelLayout {
     placement: GanttLabelPlacement;
@@ -61,6 +69,9 @@ export interface GanttLabelLayout {
  * Picks where a task's label goes relative to its bar: inside it when it fits,
  * otherwise beside it — falling to the left when the bar runs to the right edge
  * of the plot, which is what makes edge overflow structurally impossible.
+ *
+ * The boxes beside the bar stop at `boundLeft`/`boundRight`, so a label can be
+ * told to fit the gap its neighbours leave rather than the whole canvas.
  *
  * `'none'` is not data loss: the bar keeps its `title` tooltip.
  */
@@ -203,6 +214,11 @@ export interface GanttLane {
     /** px, so the caller can pick the label ink without redoing the geometry */
     barX: number;
     barWidth: number;
+    /**
+     * true when a lane-mate ends where this bar starts. They share a lane and a
+     * section colour, so without a seam down this edge the two read as one bar.
+     */
+    abuts: boolean;
 }
 export type GanttRowKind = 'task' | 'group-header' | 'group-collapsed';
 export interface GanttRow {
