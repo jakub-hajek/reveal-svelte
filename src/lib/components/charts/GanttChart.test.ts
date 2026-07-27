@@ -148,6 +148,44 @@ describe('GanttChart groups', () => {
 		expect(headers.map((el) => el.textContent?.trim())).toEqual(['Discovery', 'Build']);
 	});
 
+	// the compact reading is the useful default on a slide; expanding is one click
+	it('collapses every group on first render unless told otherwise', () => {
+		const { container } = render(GanttChart, { props: { tasks: grouped, groups: true } });
+		expect(container.querySelectorAll('.gantt-row.is-collapsed').length).toBe(2);
+
+		const expanded = render(GanttChart, {
+			props: { tasks: grouped, groups: true, collapsed: false }
+		});
+		expect(expanded.container.querySelector('.gantt-row.is-collapsed')).toBeNull();
+	});
+
+	it('draws a summary bar on an expanded group header only when asked', () => {
+		const bare = render(GanttChart, {
+			props: { tasks: grouped, groups: true, collapsed: false }
+		});
+		expect(bare.container.querySelector('.gantt-group-row .gantt-bar')).toBeNull();
+		bare.unmount();
+
+		const { container } = render(GanttChart, {
+			props: { tasks: grouped, groups: true, collapsed: false, summaryBar: true }
+		});
+		const summaries = container.querySelectorAll('.gantt-group-row .gantt-bar.is-summary');
+		expect(summaries.length).toBe(2);
+	});
+
+	// a collapsed group is made of its children's own bars, so it never had a
+	// roll-up to suppress
+	it('leaves a collapsed group untouched by summaryBar', () => {
+		const off = render(GanttChart, { props: { tasks: grouped, groups: true } });
+		const bars = off.container.querySelectorAll('.gantt-row.is-collapsed .gantt-bar').length;
+		expect(bars).toBe(4);
+		off.unmount();
+
+		const on = render(GanttChart, { props: { tasks: grouped, groups: true, summaryBar: true } });
+		expect(on.container.querySelectorAll('.gantt-row.is-collapsed .gantt-bar').length).toBe(bars);
+		expect(on.container.querySelector('.gantt-bar.is-summary')).toBeNull();
+	});
+
 	// the gutter reads as an outline when there's a tree, and stays tucked
 	// against the axis when there isn't
 	it('indents gutter rows by their depth only once grouping is on', () => {
@@ -161,7 +199,9 @@ describe('GanttChart groups', () => {
 		expect(new Set(flatDepths)).toEqual(new Set(['0']));
 		flat.unmount();
 
-		const { container } = render(GanttChart, { props: { tasks: grouped, groups: true } });
+		const { container } = render(GanttChart, {
+			props: { tasks: grouped, groups: true, collapsed: false }
+		});
 		expect(container.querySelector('.gantt-chart.has-groups')).not.toBeNull();
 		const depths = [...container.querySelectorAll('.gantt-label, .gantt-group-label')].map((el) =>
 			(el as HTMLElement).style.getPropertyValue('--gantt-depth').trim()
@@ -264,7 +304,9 @@ describe('GanttChart groups', () => {
 
 	// what keeps getByText usable: collapsed → on the bar, expanded → in the gutter
 	it('shows each task label exactly once in either state', () => {
-		const expanded = render(GanttChart, { props: { tasks: grouped, groups: true } });
+		const expanded = render(GanttChart, {
+			props: { tasks: grouped, groups: true, collapsed: false }
+		});
 		expect(expanded.getAllByText('Backend')).toHaveLength(1);
 		expect(expanded.container.querySelector('.gantt-bar-label')).toBeNull();
 		expanded.unmount();

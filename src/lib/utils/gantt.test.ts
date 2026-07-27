@@ -580,12 +580,21 @@ describe('layoutGanttRows', () => {
 			'group-header',
 			'task'
 		]);
-		expect(rows[0].lanes[0].bar.summary).toBe(true);
 		expect(rows[1].depth).toBe(1);
 	});
 
-	it('draws the whole group span on the header bar', () => {
+	// the children are right below it, so a roll-up would restate them
+	it('leaves an expanded group header bare unless a summary bar is asked for', () => {
 		const { rows } = layoutGanttRows(buildGanttTree(items, true), layoutOpts());
+		expect(rows[0].lanes).toEqual([]);
+	});
+
+	it('draws the whole group span on the header bar', () => {
+		const { rows } = layoutGanttRows(
+			buildGanttTree(items, true),
+			layoutOpts([], { summaryBar: true })
+		);
+		expect(rows[0].lanes[0].bar.summary).toBe(true);
 		expect(rows[0].lanes[0].bar.startMs).toBe(day(1));
 		expect(rows[0].lanes[0].bar.endMs).toBe(day(10));
 	});
@@ -599,7 +608,10 @@ describe('layoutGanttRows', () => {
 	});
 
 	it('moves labels onto the bars only inside a collapsed group', () => {
-		const expanded = layoutGanttRows(buildGanttTree(items, true), layoutOpts());
+		const expanded = layoutGanttRows(
+			buildGanttTree(items, true),
+			layoutOpts([], { summaryBar: true })
+		);
 		expect(expanded.rows.every((row) => row.lanes.every((l) => l.label.placement === 'none'))).toBe(
 			true
 		);

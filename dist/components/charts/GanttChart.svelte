@@ -25,7 +25,8 @@
 		otherLabel = undefined,
 		dependencies = true,
 		groups = false,
-		collapsed = false,
+		collapsed = true,
+		summaryBar = false,
 		legend = undefined,
 		width = 900,
 		rowHeight = 36,
@@ -41,6 +42,7 @@
 		dependencies?: boolean;
 		groups?: boolean;
 		collapsed?: boolean | string[];
+		summaryBar?: boolean;
 		legend?: boolean;
 		width?: number;
 		rowHeight?: number;
@@ -163,7 +165,8 @@
 			plotWidth,
 			msToPx,
 			labelFontSize: barLabelSize,
-			barColor
+			barColor,
+			summaryBar
 		})
 	);
 

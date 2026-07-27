@@ -285,7 +285,8 @@ diamond. With `groups`, sections become collapsible rows.
 | `otherLabel` | `string` | per locale | Legend label for tasks with no `section` (cs → "Ostatní", else "Other") |
 | `dependencies` | `boolean` | `true` | `false` keeps the `dependsOn` data but hides the arrows |
 | `groups` | `boolean` | `false` | Promotes each `section` to a collapsible group row |
-| `collapsed` | `boolean \| string[]` | `false` | Groups collapsed on first render (`true` = all); clicks take over afterwards |
+| `collapsed` | `boolean \| string[]` | `true` | Groups collapsed on first render (`true` = all, `false` = none); clicks take over afterwards |
+| `summaryBar` | `boolean` | `false` | Draws the rolled-up group bar on an *expanded* group's header row |
 | `legend` | `boolean` | auto | Forces the legend on/off; auto = shown only when there are 2+ sections and `groups` is off |
 | `width` | `number` | `900` | Total width in pixels |
 | `rowHeight` | `number` | `36` | Row height in pixels |
@@ -332,9 +333,14 @@ right-aligned to an outline: rows sit flush left and indent one
 task with no `section` — a peer of the group headings rather than a child of one
 — lines its name up with theirs and is emboldened to match, just without a
 triangle of its own. Charts without `groups` keep their labels tucked against the
-axis. The header carries a
-faint bar spanning the whole group, and its progress is the duration-weighted
+axis. An expanded header's plot row is empty by default — its children are
+directly below it, so a roll-up would only restate them. `summaryBar` puts it
+back: a faint bar spanning the whole group, its progress the duration-weighted
 average of its tasks.
+
+**Every group starts collapsed.** That is the compact reading a slide wants, and
+expanding is one click. Pass `collapsed={false}` for the opposite, or a list of
+section names to collapse only some.
 
 Collapsing does not hide anything. The group's tasks are packed onto as few
 sub-lanes as their dates allow — tasks that don't overlap in time share a lane —
@@ -354,7 +360,11 @@ on both pastel and near-black palettes — but a `color` that is neither hex nor
 placed beside the bar rather than on it.
 
 ```svelte
-<GanttChart {tasks} groups collapsed={['Build']} />
+<!-- everything collapsed, which is the default -->
+<GanttChart {tasks} groups />
+
+<!-- only Build folded away; the rest expanded, with roll-up bars on their headers -->
+<GanttChart {tasks} groups collapsed={['Build']} summaryBar />
 ```
 
 Collapsing changes the chart's height mid-slide, so it asks `RevealWrapper` to

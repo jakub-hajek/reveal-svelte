@@ -235,6 +235,13 @@ export interface GanttLayoutOptions {
     labelFontSize: number;
     /** resolved fill of a bar — decides whether its label may sit on top of it */
     barColor: (bar: GanttBarSpec) => string;
+    /**
+     * Whether an *expanded* group's header row carries a rolled-up bar spanning
+     * its children. Off by default: the children are right below it, so the
+     * roll-up restates what the reader can already see. A collapsed group is
+     * unaffected — there the packed child bars are the row.
+     */
+    summaryBar?: boolean;
 }
 /**
  * Flattens the tree into rows with explicit `y` and `height`. A collapsed group

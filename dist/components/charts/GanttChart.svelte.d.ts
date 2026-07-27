@@ -7,6 +7,7 @@ type $$ComponentProps = {
     dependencies?: boolean;
     groups?: boolean;
     collapsed?: boolean | string[];
+    summaryBar?: boolean;
     legend?: boolean;
     width?: number;
     rowHeight?: number;

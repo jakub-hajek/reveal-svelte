@@ -493,7 +493,7 @@ export function layoutGanttRows(tree, o) {
                 continue;
             }
             if (!o.collapsed.has(node.section)) {
-                const rolled = barFromGroup(node);
+                const rolled = o.summaryBar === true ? barFromGroup(node) : null;
                 rows.push({
                     key: node.key,
                     kind: 'group-header',
