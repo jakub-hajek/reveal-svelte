@@ -28,9 +28,13 @@
 	let revealElement: HTMLDivElement;
 
 	function runAutoFit() {
-		if (revealElement) {
-			requestAnimationFrame(() => autoFitSlides(revealElement));
-		}
+		if (!revealElement) return;
+		requestAnimationFrame(() => {
+			// Overview mode positions slides via inline transforms on each <section>;
+			// autofit would overwrite them and collapse the overview grid.
+			if (revealInstance?.isOverview()) return;
+			autoFitSlides(revealElement);
+		});
 	}
 
 	onMount(async () => {
@@ -59,6 +63,8 @@
 		runAutoFit();
 		revealInstance.on('slidechanged', runAutoFit);
 		revealInstance.on('resize', runAutoFit);
+		// Leaving overview clears all inline slide transforms — re-apply autofit scaling.
+		revealInstance.on('overviewhidden', runAutoFit);
 		window.addEventListener('resize', runAutoFit);
 	});
 
@@ -69,6 +75,7 @@
 		if (revealInstance) {
 			revealInstance.off('slidechanged', runAutoFit);
 			revealInstance.off('resize', runAutoFit);
+			revealInstance.off('overviewhidden', runAutoFit);
 			revealInstance.destroy();
 			revealInstance = null;
 		}
