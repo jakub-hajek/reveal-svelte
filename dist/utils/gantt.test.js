@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGanttAnchorMap, buildGanttTree, computeGanttScale, estimateTextWidth, formatGanttDate, ganttArrowHead, ganttBarExtent, ganttDependencyPath, ganttLabelInk, layoutGanttRows, packGanttLanes, parseColorRGB, relativeLuminance, readableTextColor, resolveGanttArrows, resolveGanttLabel, rollUpGanttGroup, toUTCms } from './gantt';
+import { buildGanttAnchorMap, buildGanttTree, computeGanttScale, estimateTextWidth, formatGanttDate, ganttArrowHead, ganttBarExtent, ganttDependencyPath, ganttLabelInk, GANTT_MILESTONE_HALF, layoutGanttRows, packGanttLanes, parseColorRGB, relativeLuminance, readableTextColor, resolveGanttArrows, resolveGanttLabel, rollUpGanttGroup, toUTCms } from './gantt';
 const DAY_MS = 86_400_000;
 describe('toUTCms', () => {
     it('parses ISO date strings as UTC midnight', () => {
@@ -616,6 +616,31 @@ describe('layoutGanttRows', () => {
         expect(rows[0].laneCount).toBe(1);
         expect(rows[0].lanes.map((lane) => lane.lane)).toEqual([0, 0, 0]);
         expect(rows[0].lanes.every((lane) => lane.label.placement !== 'none')).toBe(true);
+    });
+    it('ends a bar short of the diamond that closes it', () => {
+        const closing = [
+            mkItem(0, 'Delivery', 1, 9, 'Ship'),
+            mkItem(1, 'Go-live', 9, 9, 'Ship', { milestone: true })
+        ];
+        const { rows } = layoutGanttRows(buildGanttTree(closing, true), layoutOpts(['Ship']));
+        const [bar, gate] = rows[0].lanes;
+        expect(bar.lane).toBe(gate.lane);
+        // daylight between the bar's end and the diamond's left vertex
+        expect(gate.barX - GANTT_MILESTONE_HALF - (bar.barX + bar.barWidth)).toBeGreaterThan(0);
+        // and it only gives up the diamond's reach, not a meaningful part of the phase
+        const untrimmed = layoutGanttRows(buildGanttTree([closing[0]], true), layoutOpts(['Ship'])).rows[0].lanes[0];
+        expect(untrimmed.barWidth - bar.barWidth).toBeLessThan(2 * GANTT_MILESTONE_HALF);
+    });
+    it('leaves a bar alone when no milestone closes it', () => {
+        const apart = [
+            mkItem(0, 'Delivery', 1, 4, 'Ship'),
+            // far enough right that its diamond never reaches the bar
+            mkItem(1, 'Go-live', 40, 40, 'Ship', { milestone: true })
+        ];
+        const { rows } = layoutGanttRows(buildGanttTree(apart, true), layoutOpts(['Ship']));
+        const alone = layoutGanttRows(buildGanttTree([apart[0]], true), layoutOpts(['Ship'])).rows[0]
+            .lanes[0];
+        expect(rows[0].lanes[0].barWidth).toBe(alone.barWidth);
     });
     // only the leading half is forgiven: a milestone inside a bar still overlaps it
     it('still spends a lane on a milestone that lands mid-bar', () => {

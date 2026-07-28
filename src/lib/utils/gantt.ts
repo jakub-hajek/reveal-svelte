@@ -155,6 +155,8 @@ export function ganttArrowHead(x: number, y: number): string {
 
 /** Mirrors `.gantt-bar { min-width: 4px }` — a 1px bar still paints 4px wide. */
 const MIN_BAR_PX = 4;
+/** Daylight left between a bar and the diamond of the milestone that closes it. */
+const MILESTONE_CLEARANCE = 3;
 /** Breathing room between a label and the edge of the bar it sits inside. */
 const LABEL_PAD_INSIDE = 8;
 /** Gap between a bar and a label placed beside it. */
@@ -760,9 +762,9 @@ function extentOf(
  *
  * The diamond is centred on the day, so half of it always hangs back over
  * whatever ended there; a gate landing on the last day of the phase it closes is
- * the normal case, not a collision. Sharing the lane costs the few pixels of bar
- * the diamond covers — which is how a milestone is drawn everywhere else — while
- * refusing costs a whole lane, and the row is as tall as its lane count.
+ * the normal case, not a collision. Refusing to share costs a whole lane, and the
+ * row is as tall as its lane count — so they share, and `clearMilestones` pulls
+ * the bar's end back to keep the diamond legible.
  *
  * Labels are still bounded by the true footprint, so no text is written under the
  * diamond.
@@ -775,6 +777,43 @@ function packingFootprint(
 	const drawn = extentOf(bar, geometry, NO_LABEL, o.plotWidth);
 	if (!bar.milestone) return drawn;
 	return { startPx: clamp(geometry.barX, 0, o.plotWidth), endPx: drawn.endPx };
+}
+
+/**
+ * Ends a bar short of the milestone that closes it, so the diamond keeps a rim of
+ * daylight instead of growing out of the bar's tail.
+ *
+ * Sharing a lane is what makes this necessary: drawn honestly the gate's leading
+ * half lies over the bar and the two read as a single mark with a notch. The bar
+ * gives up those pixels — a phase drawn a few days short is a small lie about a
+ * date the gate beside it already states, whereas two marks fused into one is a
+ * lie about how many things happened.
+ *
+ * Only gates at or after a bar's end trim it. One landing mid-bar is a genuine
+ * overlap that buys its own lane, and nothing there needs clearing.
+ *
+ * Applied across the whole row rather than per lane: trimming feeds the packing
+ * that would decide the lanes, so consulting the lanes here would be circular.
+ * The window is a few px wide, so a gate can only ever trim a bar it nearly meets.
+ */
+function clearMilestones(
+	bars: readonly GanttBarSpec[],
+	geometry: readonly { barX: number; barWidth: number }[]
+): { barX: number; barWidth: number }[] {
+	const gates = bars.flatMap((bar, i) => (bar.milestone ? [geometry[i].barX] : []));
+	if (!gates.length) return [...geometry];
+
+	return geometry.map((geo, i) => {
+		if (bars[i].milestone) return geo;
+		const end = geo.barX + geo.barWidth;
+		const limit = Math.min(
+			...gates
+				.filter((gate) => gate >= end)
+				.map((gate) => gate - GANTT_MILESTONE_HALF - MILESTONE_CLEARANCE)
+		);
+		if (!(limit < end)) return geo;
+		return { barX: geo.barX, barWidth: Math.max(limit - geo.barX, MIN_BAR_PX) };
+	});
 }
 
 /**
@@ -927,7 +966,10 @@ export function layoutGanttRows(
 			// packing decides. Resolving labels first made that circular, so two
 			// tasks running back to back — touching, never overlapping — were split
 			// apart by the footprint of a label that would have truncated happily.
-			const geometry = bars.map((bar) => barGeometry(bar, o));
+			const geometry = clearMilestones(
+				bars,
+				bars.map((bar) => barGeometry(bar, o))
+			);
 			const footprints = bars.map((bar, i) => extentOf(bar, geometry[i], NO_LABEL, o.plotWidth));
 
 			const { lanes, laneCount: packedLanes } = packGanttLanes(
