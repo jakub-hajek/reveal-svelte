@@ -286,9 +286,28 @@
 	 * on the same lane. An over-long estimate then costs an ellipsis, never an
 	 * overlap.
 	 */
+	/**
+	 * Where the layout actually put this bar, as percentages of the plot.
+	 *
+	 * Reading the geometry back rather than re-deriving it from the dates is what
+	 * lets the layout shorten a bar — which it does to leave the milestone that
+	 * closes it some daylight. The two agree to the pixel for every bar the layout
+	 * left alone, since `msToPx` is this same percentage scaled by `plotWidth`.
+	 *
+	 * Percent rather than the layout's own px so that a resize landing between
+	 * layout passes rescales the bar with the plot instead of stranding it.
+	 */
+	function laneBox(lane: GanttLane): { startPct: number; endPct: number } {
+		if (!(plotWidth > 0)) {
+			const startPct = pct(lane.bar.startMs);
+			return { startPct, endPct: lane.bar.milestone ? startPct : pct(lane.bar.endMs) };
+		}
+		const startPct = (lane.barX / plotWidth) * 100;
+		return { startPct, endPct: startPct + (lane.barWidth / plotWidth) * 100 };
+	}
+
 	function labelStyle(lane: GanttLane): string {
-		const startPct = pct(lane.bar.startMs);
-		const endPct = lane.bar.milestone ? startPct : pct(lane.bar.endMs);
+		const { startPct, endPct } = laneBox(lane);
 		const edge = lane.bar.milestone ? GANTT_MILESTONE_HALF : 0;
 		const gap = LABEL_GAP_OUTSIDE + edge;
 		const width = `max-width: ${Math.round(lane.label.maxWidth * 100) / 100}px;`;
@@ -403,12 +422,13 @@
 							{#each row.lanes as lane (lane.bar.key)}
 								{@const bar = lane.bar}
 								{@const band = laneBand(row, lane.lane)}
+							{@const box = laneBox(lane)}
 								<div class="gantt-lane" style="top: {band.top}px; height: {band.height}px;">
 									{#if bar.milestone}
 										<div
 											class="gantt-milestone"
 											class:is-summary={bar.summary}
-											style="left: {pct(bar.startMs)}%; background: {barColor(bar)};"
+											style="left: {box.startPct}%; background: {barColor(bar)};"
 											title={barTitle(bar)}
 										></div>
 									{:else}
@@ -416,8 +436,8 @@
 											class="gantt-bar"
 											class:is-summary={bar.summary}
 											class:abuts={lane.abuts}
-											style="left: {pct(bar.startMs)}%; width: {pct(bar.endMs) -
-												pct(bar.startMs)}%; background: {bar.progress != null
+											style="left: {box.startPct}%; width: {box.endPct -
+												box.startPct}%; background: {bar.progress != null
 												? `color-mix(in srgb, ${barColor(bar)} 30%, transparent)`
 												: barColor(bar)};"
 											title={barTitle(bar)}

@@ -366,4 +366,25 @@ describe('GanttChart groups', () => {
         // all three overlap, so they keep separate lanes and both arrows survive
         expect(container.querySelectorAll('.gantt-arrow-line').length).toBe(2);
     });
+    // the layout shortens the bar; the DOM has to be drawn from that geometry
+    // rather than re-derived from the dates, or the trim never reaches the screen
+    it('draws a bar short of the milestone sharing its lane', () => {
+        const closing = [
+            { label: 'Delivery', start: '2026-01-05', end: '2026-04-04', section: 'Ship' },
+            { label: 'Go-live', start: '2026-04-04', section: 'Ship' }
+        ];
+        const { container } = render(GanttChart, {
+            props: { tasks: closing, groups: true, collapsed: true }
+        });
+        const pctOf = (el, prop) => {
+            const match = (el.getAttribute('style') ?? '').match(new RegExp(`${prop}:\\s*([\\d.]+)%`));
+            return match ? Number(match[1]) : NaN;
+        };
+        const bar = container.querySelector('.gantt-bar');
+        const gate = container.querySelector('.gantt-milestone');
+        // they share one lane, so the row stays a single lane tall
+        expect(container.querySelectorAll('.gantt-row').length).toBe(1);
+        // and the bar stops before the diamond's centre instead of running to it
+        expect(pctOf(bar, 'left') + pctOf(bar, 'width')).toBeLessThan(pctOf(gate, 'left'));
+    });
 });

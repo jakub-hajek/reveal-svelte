@@ -1,6 +1,6 @@
 {
 	"name": "reveal-svelte",
-	"version": "0.6.2",
+	"version": "0.6.3",
 	"description": "Reveal.js presentation components for Svelte 5 — slides, layouts, charts, markdown, math, code and Excalidraw diagrams.",
 	"license": "MIT",
 	"type": "module",
