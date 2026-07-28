@@ -1063,15 +1063,24 @@
 	 * Always present, even for a single-lane row: the bar geometry below is all
 	 * percentages, so without this wrapper every bar in a multi-lane group row
 	 * would resolve its height against the whole row and come out too tall.
+	 *
+	 * One lane element per *bar*, not per packed lane, and each spans the full
+	 * width of the plot — so inside a collapsed group every bar sharing a lane
+	 * is roofed over by the transparent wrapper of whichever lane-mate the
+	 * layout emitted last. Transparent to the pointer, so the hit test falls
+	 * through to the bar that is actually under the cursor.
 	 */
 	.gantt-lane {
 		position: absolute;
 		left: 0;
 		right: 0;
+		pointer-events: none;
 	}
 
 	.gantt-bar {
 		position: absolute;
+		/* back on: the lane above opts its whole subtree out */
+		pointer-events: auto;
 		top: 50%;
 		transform: translateY(-50%);
 		height: var(--gantt-bar-thickness, 62%);
@@ -1128,6 +1137,8 @@
 
 	.gantt-milestone {
 		position: absolute;
+		/* see `.gantt-bar` */
+		pointer-events: auto;
 		top: 50%;
 		width: 13px;
 		height: 13px;
