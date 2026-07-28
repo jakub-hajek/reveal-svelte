@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { GanttChart } from 'reveal-svelte';
-	import type { GanttTask } from 'reveal-svelte';
+	import type { GanttMarker, GanttTask } from 'reveal-svelte';
 
 	const tasks: GanttTask[] = [
 		{ label: 'Discovery', start: '2026-01-05', end: '2026-01-23', section: 'Research', progress: 100, comment: 'Ten stakeholder sessions, all written up in the research wiki.' },
@@ -13,14 +13,19 @@
 		{ label: 'QA + hardening', start: '2026-05-11', end: '2026-06-05', section: 'Launch', dependsOn: 'Frontend' },
 		{ label: 'Go live', start: '2026-06-12', section: 'Launch', dependsOn: ['QA + hardening', 'Beta release'] }
 	];
+
+	const markers: GanttMarker[] = [
+		{ date: '2026-01-05', label: 'Kickoff' },
+		{ date: '2026-05-15', label: 'Code freeze', color: 'var(--theme-primary)', style: 'solid' }
+	];
 </script>
 
 <section>
 	<h2>Gantt Chart Example</h2>
-	<GanttChart {tasks} today="2026-03-10" width={1000} rowHeight={40} />
+	<GanttChart {tasks} today="2026-03-10" {markers} width={1000} rowHeight={40} />
 	<p class="hint">
 		Hover a bar for details · click to pin it open · <kbd>Esc</kbd> to close · four tasks carry a
-		<code>comment</code>
+		<code>comment</code> · two <code>markers</code> beside the <code>today</code> line
 	</p>
 </section>
 

@@ -72,6 +72,51 @@ describe('GanttChart component', () => {
 		expect(container.querySelector('.gantt-today')).toBeNull();
 	});
 
+	it('renders one marker line per in-range marker', () => {
+		const { container } = render(GanttChart, {
+			props: { tasks, markers: [{ date: '2026-02-01' }, { date: '2026-03-01' }] }
+		});
+		expect(container.querySelectorAll('.gantt-marker').length).toBe(2);
+	});
+
+	it('drops markers outside the date range', () => {
+		const { container } = render(GanttChart, {
+			props: { tasks, markers: [{ date: '2026-02-01' }, { date: '2030-01-01' }] }
+		});
+		expect(container.querySelectorAll('.gantt-marker').length).toBe(1);
+	});
+
+	it('draws marker captions in the axis strip, not on the canvas', () => {
+		const { getByText } = render(GanttChart, {
+			props: { tasks, markers: [{ date: '2026-02-01', label: 'Kickoff' }] }
+		});
+		const label = getByText('Kickoff');
+		expect(label).toHaveClass('gantt-marker-label');
+		expect(label.closest('.gantt-axis')).not.toBeNull();
+	});
+
+	it('applies per-marker color and line style', () => {
+		const { container } = render(GanttChart, {
+			props: { tasks, markers: [{ date: '2026-02-01', color: '#ff0000', style: 'solid' }] }
+		});
+		const style = container.querySelector<HTMLElement>('.gantt-marker')?.style;
+		expect(style?.borderLeftStyle).toBe('solid');
+		expect(style?.borderLeftColor).toBe('rgb(255, 0, 0)');
+	});
+
+	it('grows the axis only when a marker carries a caption', () => {
+		const axisHeight = (root: HTMLElement) =>
+			root.querySelector<HTMLElement>('.gantt-body')?.style.getPropertyValue('--gantt-axis-h');
+
+		const bare = render(GanttChart, { props: { tasks, markers: [{ date: '2026-02-01' }] } });
+		expect(axisHeight(bare.container as HTMLElement)).toBe('26px');
+
+		const labelled = render(GanttChart, {
+			props: { tasks, markers: [{ date: '2026-02-01', label: 'Kickoff' }] }
+		});
+		expect(axisHeight(labelled.container as HTMLElement)).toBe('44px');
+	});
+
 	it('renders axis ticks and matching gridlines', () => {
 		const { container } = render(GanttChart, { props: { tasks } });
 		const ticks = container.querySelectorAll('.gantt-tick');

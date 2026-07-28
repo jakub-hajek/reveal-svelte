@@ -281,6 +281,7 @@ diamond. With `groups`, sections become collapsible rows.
 |------|------|---------|-------------|
 | `tasks` | `GanttTask[]` | **required** | One entry per row, in display order |
 | `today` | `boolean \| string \| Date` | `false` | `true` = now, or an explicit date; draws a dashed marker |
+| `markers` | `GanttMarker[]` | `[]` | Extra vertical lines with captions — kickoff, a freeze, a deadline |
 | `locale` | `string` | browser locale | BCP 47 tag for axis labels and popup dates (`'cs-CZ'`) |
 | `otherLabel` | `string` | per locale | Legend label for tasks with no `section` (cs → "Ostatní", else "Other") |
 | `dependencies` | `boolean` | `true` | `false` keeps the `dependsOn` data but hides the arrows |
@@ -311,6 +312,32 @@ diamond. With `groups`, sections become collapsible rows.
 | `color` | `string` | Overrides the section color for this row |
 | `milestone` | `boolean` | Forces a diamond even when `end` is set |
 | `comment` | `string` | Free-form note shown in the bar's detail popup; newlines are preserved |
+
+**Vertical markers.** `today` draws one dashed line; `markers` draws as many as
+you like, each with a caption in the axis strip above it, its own color and its
+own line style. A marker whose date falls outside the chart's range is skipped
+rather than pinned to an edge — same as `today`. The captions claim a band above
+the tick labels, so they never land on a bar.
+
+```svelte
+<GanttChart
+	{tasks}
+	today="2026-03-10"
+	markers={[
+		{ date: '2026-02-01', label: 'Kickoff' },
+		{ date: '2026-05-15', label: 'Code freeze', color: 'var(--theme-primary)', style: 'solid' }
+	]}
+/>
+```
+
+`GanttMarker`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `date` | `string \| Date` | ISO date, e.g. `'2026-05-15'` (**required**) |
+| `label` | `string` | Caption drawn in the axis strip above the line |
+| `color` | `string` | Any CSS color or `var()`; defaults to `--gantt-marker-color` |
+| `style` | `'dashed' \| 'solid' \| 'dotted'` | Line style; defaults to `'dashed'` |
 
 The time axis picks day/week/month/quarter/year ticks automatically from the
 date range, and dates are localized via `Intl` (`locale="cs-CZ"` → "5. 1.",

@@ -38,6 +38,10 @@ names, so overriding one token updates everything downstream.
 | `--theme-code-*` (`bg`, `text`, `keyword`, `string`, `number`, `comment`, `function`) | — | Code blocks |
 | `--theme-chart-1` … `--theme-chart-12` | `#f38ba8`, `#89b4fa`, `#a6e3a1`, … | Chart series, Gantt sections |
 | `--gantt-dependency-color` | falls back to `--theme-muted` | `GanttChart` dependency arrows |
+| `--gantt-today-color` | falls back to `--theme-muted` | The dashed `today` line |
+| `--gantt-marker-color` | falls back to `--theme-muted` | Default line and caption color for `markers` (a marker's own `color` wins) |
+| `--gantt-marker-label-bg` | falls back to `--theme-surface-0` | Chip behind a marker caption, so it reads over the tick labels |
+| `--gantt-marker-label-size` | `11px` | Marker caption text size |
 | `--gantt-group-label-color` | falls back to `--theme-text` | `GanttChart` group header text |
 | `--gantt-disclosure-color` | falls back to `--theme-muted` | Group expand/collapse triangle |
 | `--gantt-group-indent` | `14px` | Indent per tree level in a grouped chart's gutter |

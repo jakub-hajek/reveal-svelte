@@ -35,10 +35,26 @@ export interface GanttTask {
      */
     comment?: string;
 }
+/** A vertical line across the whole plot, for a date landmark the rows share */
+export interface GanttMarker {
+    /** ISO date string (e.g. '2026-05-15') or Date */
+    date: string | Date;
+    /** Caption drawn in the axis strip above the line */
+    label?: string;
+    /** Any CSS color or `var()`; defaults to `--gantt-marker-color` */
+    color?: string;
+    /** Defaults to 'dashed' */
+    style?: 'dashed' | 'solid' | 'dotted';
+}
 export interface GanttChartProps {
     tasks: GanttTask[];
     /** true = current date, or an explicit date; draws a dashed marker line */
     today?: boolean | string | Date;
+    /**
+     * Extra vertical lines — kickoff, a freeze, a deadline. One per date; a
+     * marker outside the chart's date range is skipped, as `today` is.
+     */
+    markers?: GanttMarker[];
     /** Locale for axis labels and popup dates (defaults to the browser locale) */
     locale?: string;
     /** Legend label for tasks without a section (defaults per locale: cs → 'Ostatní', otherwise 'Other') */

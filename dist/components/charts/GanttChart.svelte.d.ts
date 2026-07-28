@@ -1,7 +1,8 @@
-import type { GanttTask } from '../../types/charts';
+import type { GanttMarker, GanttTask } from '../../types/charts';
 type $$ComponentProps = {
     tasks: GanttTask[];
     today?: boolean | string | Date;
+    markers?: GanttMarker[];
     locale?: string;
     otherLabel?: string;
     dependencies?: boolean;

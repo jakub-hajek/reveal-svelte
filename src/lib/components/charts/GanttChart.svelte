@@ -13,6 +13,7 @@
 		ganttArrowHead,
 		ganttDependencyPath,
 		ganttLabelInk,
+		ganttMarkerLabelAnchor,
 		ganttTooltipLabels,
 		ganttTooltipText,
 		GANTT_MILESTONE_HALF,
@@ -29,11 +30,12 @@
 		GanttRow,
 		GanttTooltipModel
 	} from '../../utils/gantt';
-	import type { GanttTask } from '../../types/charts';
+	import type { GanttMarker, GanttTask } from '../../types/charts';
 
 	let {
 		tasks,
 		today = false,
+		markers = [],
 		locale = undefined,
 		otherLabel = undefined,
 		dependencies = true,
@@ -52,6 +54,7 @@
 	}: {
 		tasks: GanttTask[];
 		today?: boolean | string | Date;
+		markers?: GanttMarker[];
 		locale?: string;
 		otherLabel?: string;
 		dependencies?: boolean;
@@ -78,8 +81,10 @@
 	 * lanes doesn't strobe a popup for every bar on the way.
 	 */
 	const TOOLTIP_DELAY_MS = 120;
-	/** matches `.gantt-axis { height: 26px }` in the stylesheet below */
+	/** matches `.gantt-axis { height: var(--gantt-axis-h, 26px) }` below */
 	const AXIS_HEIGHT = 26;
+	/** extra axis height claimed by the marker captions, when any marker has one */
+	const MARKER_BAND = 18;
 	/** matches `.gantt-tooltip` padding in the stylesheet below */
 	const TOOLTIP_PAD_X = 10;
 
@@ -185,6 +190,31 @@
 		const ms = today === true ? Date.now() : toUTCms(today);
 		return ms >= scale.min && ms <= scale.max ? pct(ms) : null;
 	});
+
+	/**
+	 * Out-of-range markers are dropped rather than clamped to an edge, where they
+	 * would claim a date they don't have — the same call `today` makes.
+	 */
+	const markerLines = $derived.by(() => {
+		const range = scale;
+		if (!range) return [];
+		return markers
+			.map((marker, i) => ({ marker, ms: toUTCms(marker.date), key: `m:${i}` }))
+			.filter(({ ms }) => ms >= range.min && ms <= range.max)
+			.map(({ marker, ms, key }) => ({
+				key,
+				pct: pct(ms),
+				label: marker.label,
+				color: marker.color,
+				style: marker.style ?? 'dashed',
+				anchor: ganttMarkerLabelAnchor(pct(ms))
+			}));
+	});
+
+	/** the captions get their own band above the ticks, but only if there are any */
+	const axisHeight = $derived(
+		AXIS_HEIGHT + (markerLines.some((marker) => marker.label) ? MARKER_BAND : 0)
+	);
 
 	/** `dependsOn` accepts either an explicit `id` or a task `label`; ids win */
 	const taskIndexByKey = $derived.by(() => {
@@ -446,7 +476,7 @@
 					progressHeight: 14
 				})
 			},
-			{ width: plotWidth, height: layout.totalHeight, headroom: AXIS_HEIGHT }
+			{ width: plotWidth, height: layout.totalHeight, headroom: axisHeight }
 		);
 
 		return { model, place, color: barColor(lane.bar) };
@@ -580,7 +610,7 @@
 	{/if}
 
 	{#if scale}
-		<div class="gantt-body">
+		<div class="gantt-body" style="--gantt-axis-h: {axisHeight}px;">
 			<div class="gantt-labels" style="width: {labelWidth}px;">
 				<div class="gantt-axis-spacer"></div>
 				{#each layout.rows as row, i (row.key)}
@@ -626,6 +656,16 @@
 					{#each scale.ticks as tick (tick.ms)}
 						<span class="gantt-tick" style="left: {pct(tick.ms)}%;">{tick.label}</span>
 					{/each}
+					<!-- captions live up here, not on the canvas, where they would land on bars -->
+					{#each markerLines as marker (marker.key)}
+						{#if marker.label}
+							<span
+								class="gantt-marker-label is-{marker.anchor}"
+								style="left: {marker.pct}%; {marker.color ? `color: ${marker.color};` : ''}"
+								>{marker.label}</span
+							>
+						{/if}
+					{/each}
 				</div>
 				<div class="gantt-canvas" bind:this={canvasEl}>
 					{#each scale.ticks as tick (tick.ms)}
@@ -634,6 +674,16 @@
 					{#if todayPct != null}
 						<div class="gantt-today" style="left: {todayPct}%;"></div>
 					{/if}
+					<!-- before the rows, like the gridlines: bars paint over their lines -->
+					{#each markerLines as marker (marker.key)}
+						<div
+							class="gantt-marker"
+							aria-hidden="true"
+							style="left: {marker.pct}%; border-left-style: {marker.style}; {marker.color
+								? `border-left-color: ${marker.color};`
+								: ''}"
+						></div>
+					{/each}
 					{#each layout.rows as row, i (row.key)}
 						<div
 							class="gantt-row"
@@ -814,9 +864,10 @@
 		flex: none;
 	}
 
+	/* grows to fit the marker captions; the gutter spacer has to grow with it */
 	.gantt-axis-spacer,
 	.gantt-axis {
-		height: 26px;
+		height: var(--gantt-axis-h, 26px);
 	}
 
 	.gantt-label {
@@ -944,9 +995,11 @@
 		color: var(--theme-muted, #888);
 	}
 
+	/* bottom-anchored: the ticks stay against the canvas whatever the caption
+	   band above them costs */
 	.gantt-tick {
 		position: absolute;
-		top: 4px;
+		bottom: 6px;
 		transform: translateX(-50%);
 		white-space: nowrap;
 	}
@@ -967,8 +1020,38 @@
 		position: absolute;
 		top: 0;
 		bottom: 0;
-		border-left: 2px dashed var(--theme-muted, #888);
+		border-left: 2px dashed var(--gantt-today-color, var(--theme-muted, #888));
 		transform: translateX(-1px);
+	}
+
+	/* `border-left-style` and `-color` are overridden per marker inline */
+	.gantt-marker {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		border-left: 2px dashed var(--gantt-marker-color, var(--theme-muted, #888));
+		transform: translateX(-1px);
+	}
+
+	.gantt-marker-label {
+		position: absolute;
+		top: 0;
+		padding: 0 4px;
+		border-radius: 3px;
+		font-size: var(--gantt-marker-label-size, 11px);
+		line-height: 16px;
+		white-space: nowrap;
+		background: var(--gantt-marker-label-bg, var(--theme-surface-0, transparent));
+		color: var(--gantt-marker-color, var(--theme-muted, #888));
+	}
+
+	/* `.is-start` keeps the caption's left edge on the line — no transform */
+	.gantt-marker-label.is-middle {
+		transform: translateX(-50%);
+	}
+
+	.gantt-marker-label.is-end {
+		transform: translateX(-100%);
 	}
 
 	.gantt-row {

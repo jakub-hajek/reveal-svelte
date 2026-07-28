@@ -1053,6 +1053,18 @@ export function computeGanttScale(startMs: number, endMs: number, locale?: strin
 	return { min, max, unit, ticks };
 }
 
+export type GanttMarkerAnchor = 'start' | 'middle' | 'end';
+
+/**
+ * How a marker's caption hangs off its line. Centred everywhere except near the
+ * ends of the axis, where centring would push half the caption off the plot.
+ */
+export function ganttMarkerLabelAnchor(pct: number): GanttMarkerAnchor {
+	if (pct < 6) return 'start';
+	if (pct > 94) return 'end';
+	return 'middle';
+}
+
 // ---------------------------------------------------------------------------
 // Dependency arrows
 // ---------------------------------------------------------------------------

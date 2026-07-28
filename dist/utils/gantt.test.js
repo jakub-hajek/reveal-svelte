@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGanttAnchorMap, buildGanttTree, computeGanttScale, estimateTextWidth, formatGanttDate, ganttArrowHead, ganttBarExtent, ganttDependencyPath, ganttLabelInk, GANTT_MILESTONE_HALF, layoutGanttRows, packGanttLanes, parseColorRGB, relativeLuminance, readableTextColor, resolveGanttArrows, resolveGanttLabel, rollUpGanttGroup, toUTCms, buildGanttTooltipModel, estimateGanttTooltipHeight, formatGanttDuration, ganttDurationDays, ganttTooltipLabels, ganttTooltipText, placeGanttTooltip, GANTT_TOOLTIP_GAP } from './gantt';
+import { buildGanttAnchorMap, buildGanttTree, computeGanttScale, estimateTextWidth, formatGanttDate, ganttArrowHead, ganttBarExtent, ganttDependencyPath, ganttLabelInk, ganttMarkerLabelAnchor, GANTT_MILESTONE_HALF, layoutGanttRows, packGanttLanes, parseColorRGB, relativeLuminance, readableTextColor, resolveGanttArrows, resolveGanttLabel, rollUpGanttGroup, toUTCms, buildGanttTooltipModel, estimateGanttTooltipHeight, formatGanttDuration, ganttDurationDays, ganttTooltipLabels, ganttTooltipText, placeGanttTooltip, GANTT_TOOLTIP_GAP } from './gantt';
 const DAY_MS = 86_400_000;
 describe('toUTCms', () => {
     it('parses ISO date strings as UTC midnight', () => {
@@ -62,6 +62,19 @@ describe('computeGanttScale', () => {
     it('keeps the number of ticks bounded', () => {
         const scale = computeGanttScale(toUTCms('2026-01-01'), toUTCms('2026-06-30'));
         expect(scale.ticks.length).toBeLessThanOrEqual(15);
+    });
+});
+describe('ganttMarkerLabelAnchor', () => {
+    it('centres a caption away from the edges', () => {
+        expect(ganttMarkerLabelAnchor(6)).toBe('middle');
+        expect(ganttMarkerLabelAnchor(50)).toBe('middle');
+        expect(ganttMarkerLabelAnchor(94)).toBe('middle');
+    });
+    it('hangs a caption off the near edge instead of overflowing it', () => {
+        expect(ganttMarkerLabelAnchor(0)).toBe('start');
+        expect(ganttMarkerLabelAnchor(5.9)).toBe('start');
+        expect(ganttMarkerLabelAnchor(99)).toBe('end');
+        expect(ganttMarkerLabelAnchor(100)).toBe('end');
     });
 });
 describe('formatGanttDate', () => {

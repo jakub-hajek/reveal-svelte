@@ -751,6 +751,17 @@ export function computeGanttScale(startMs, endMs, locale) {
     return { min, max, unit, ticks };
 }
 /**
+ * How a marker's caption hangs off its line. Centred everywhere except near the
+ * ends of the axis, where centring would push half the caption off the plot.
+ */
+export function ganttMarkerLabelAnchor(pct) {
+    if (pct < 6)
+        return 'start';
+    if (pct > 94)
+        return 'end';
+    return 'middle';
+}
+/**
  * Where each task's arrows should attach. Rows are visited in document order and
  * later writes win, so a group header's broad claim over its descendants is
  * overwritten by each child's own row — while a *collapsed* group stops the walk

@@ -273,6 +273,12 @@ export interface GanttLayoutOptions {
  */
 export declare function layoutGanttRows(tree: readonly GanttTreeNode[], o: GanttLayoutOptions): GanttLayout;
 export declare function computeGanttScale(startMs: number, endMs: number, locale?: string): GanttScale;
+export type GanttMarkerAnchor = 'start' | 'middle' | 'end';
+/**
+ * How a marker's caption hangs off its line. Centred everywhere except near the
+ * ends of the axis, where centring would push half the caption off the plot.
+ */
+export declare function ganttMarkerLabelAnchor(pct: number): GanttMarkerAnchor;
 export interface GanttAnchor {
     rowIndex: number;
     lane: number;
