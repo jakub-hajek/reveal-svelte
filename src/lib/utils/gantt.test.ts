@@ -298,7 +298,7 @@ describe('ganttBarExtent', () => {
 	it('gives a milestone the width of its diamond', () => {
 		const input = { barX: 300, barWidth: 0, plotWidth, milestone: true };
 		const label = resolveGanttLabel({ ...input, text: 'X', fontSize: 11 });
-		expect(ganttBarExtent(input, label).startPx).toBe(293);
+		expect(ganttBarExtent(input, label).startPx).toBe(300 - GANTT_MILESTONE_HALF);
 	});
 });
 
@@ -981,6 +981,6 @@ describe('resolveGanttArrows', () => {
 			[1, anchor(1, 0)]
 		]);
 		const arrows = resolveGanttArrows([{ fromTask: 0, toTask: 1, depKey: 'a' }], anchors, geom);
-		expect(arrows[0].x1).toBe(day(5) / DAY_MS + 7);
+		expect(arrows[0].x1).toBe(day(5) / DAY_MS + GANTT_MILESTONE_HALF);
 	});
 });

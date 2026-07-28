@@ -12,8 +12,15 @@ export interface GanttScale {
 }
 export declare function toUTCms(value: string | Date): number;
 export declare function formatGanttDate(ms: number, locale?: string): string;
-/** Half the milestone diamond, so arrows meet its vertices, not its centre. */
-export declare const GANTT_MILESTONE_HALF = 7;
+/**
+ * Half the milestone diamond, so arrows meet its vertices, not its centre.
+ *
+ * The diamond is a square turned 45°, so what it occupies horizontally is its
+ * *diagonal* — side × √2 — not its side. Reading the CSS number straight off
+ * understated the reach by a third, which quietly shrank the gap `clearMilestones`
+ * leaves and pulled arrowheads inside the shape.
+ */
+export declare const GANTT_MILESTONE_HALF: number;
 /** Half-width of the arrow head, in px; the connector line stops here. */
 export declare const GANTT_ARROW_HEAD = 7;
 /**

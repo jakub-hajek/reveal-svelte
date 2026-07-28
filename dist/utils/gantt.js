@@ -80,8 +80,17 @@ function makeLabeler(unit, locale) {
         }
     };
 }
-/** Half the milestone diamond, so arrows meet its vertices, not its centre. */
-export const GANTT_MILESTONE_HALF = 7;
+/** Mirrors `.gantt-milestone { width/height }` — the square before it is rotated. */
+const MILESTONE_SIDE = 13;
+/**
+ * Half the milestone diamond, so arrows meet its vertices, not its centre.
+ *
+ * The diamond is a square turned 45°, so what it occupies horizontally is its
+ * *diagonal* — side × √2 — not its side. Reading the CSS number straight off
+ * understated the reach by a third, which quietly shrank the gap `clearMilestones`
+ * leaves and pulled arrowheads inside the shape.
+ */
+export const GANTT_MILESTONE_HALF = (MILESTONE_SIDE * Math.SQRT2) / 2;
 /** Half-width of the arrow head, in px; the connector line stops here. */
 export const GANTT_ARROW_HEAD = 7;
 /** Length of the straight stub leaving a bar before the connector turns. */
