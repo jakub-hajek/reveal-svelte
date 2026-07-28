@@ -45,6 +45,13 @@ names, so overriding one token updates everything downstream.
 | `--gantt-bar-label-light` / `--gantt-bar-label-dark` | `#ffffff` / `#11111b` | The two inks for labels drawn on bars; which one is used is decided per bar by luminance |
 | `--gantt-bar-label-outside-color` | falls back to `--theme-text` | Labels drawn beside a bar, on the slide |
 | `--gantt-bar-thickness` | `62%` | Bar height as a share of its lane |
+| `--gantt-tooltip-bg` | falls back to `--theme-surface-0` | Detail popup background — must stay opaque, bars and gridlines run underneath it |
+| `--gantt-tooltip-color` | falls back to `--theme-text` | Detail popup text |
+| `--gantt-tooltip-muted` | falls back to `--theme-subtext` | Its date and dependency lines |
+| `--gantt-tooltip-border` | falls back to `--theme-border` | Popup border and caret |
+| `--gantt-tooltip-shadow` | `0 6px 18px rgb(0 0 0 / 0.35)` | Popup drop shadow |
+| `--gantt-tooltip-font-size` | `12px` | Popup body text size |
+| `--gantt-tooltip-max-height` | `320px` | Beyond this a pinned popup scrolls |
 
 Override per deck or per slide:
 

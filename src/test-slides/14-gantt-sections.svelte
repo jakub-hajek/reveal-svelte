@@ -23,7 +23,9 @@
 
 		// `color` overrides the section color for one task
 		{ label: 'Go / no-go', start: '2026-06-19', section: 'Release', color: '#f38ba8' },
-		{ label: 'Rollout', start: '2026-06-22', end: '2026-07-10', section: 'Release', progress: 0 }
+
+		// `comment` shows in the bar's detail popup; newlines are preserved
+		{ label: 'Rollout', start: '2026-06-22', end: '2026-07-10', section: 'Release', progress: 0, comment: 'Postupně po regionech.\nCZ první, SK o týden později.' }
 	];
 </script>
 

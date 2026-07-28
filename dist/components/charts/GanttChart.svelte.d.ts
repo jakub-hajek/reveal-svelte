@@ -9,6 +9,8 @@ type $$ComponentProps = {
     collapsed?: boolean | string[];
     summaryBar?: boolean;
     legend?: boolean;
+    tooltip?: boolean;
+    tooltipWidth?: number;
     width?: number;
     rowHeight?: number;
     laneHeight?: number;

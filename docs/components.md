@@ -281,13 +281,15 @@ diamond. With `groups`, sections become collapsible rows.
 |------|------|---------|-------------|
 | `tasks` | `GanttTask[]` | **required** | One entry per row, in display order |
 | `today` | `boolean \| string \| Date` | `false` | `true` = now, or an explicit date; draws a dashed marker |
-| `locale` | `string` | browser locale | BCP 47 tag for axis labels and tooltips (`'cs-CZ'`) |
+| `locale` | `string` | browser locale | BCP 47 tag for axis labels and popup dates (`'cs-CZ'`) |
 | `otherLabel` | `string` | per locale | Legend label for tasks with no `section` (cs → "Ostatní", else "Other") |
 | `dependencies` | `boolean` | `true` | `false` keeps the `dependsOn` data but hides the arrows |
 | `groups` | `boolean` | `false` | Promotes each `section` to a collapsible group row |
 | `collapsed` | `boolean \| string[]` | `true` | Groups collapsed on first render (`true` = all, `false` = none); clicks take over afterwards |
 | `summaryBar` | `boolean` | `false` | Draws the rolled-up group bar on an *expanded* group's header row |
 | `legend` | `boolean` | auto | Forces the legend on/off; auto = shown only when there are 2+ sections and `groups` is off |
+| `tooltip` | `boolean` | `true` | `false` drops the detail popup: bars go back to plain, non-focusable divs with a native `title` |
+| `tooltipWidth` | `number` | `260` | Width of the detail popup in pixels (a prop, not a CSS variable — the placement math needs it up front) |
 | `width` | `number` | `900` | Total width in pixels |
 | `rowHeight` | `number` | `36` | Row height in pixels |
 | `laneHeight` | `number` | `rowHeight` | Height of one packed sub-lane inside a collapsed group |
@@ -308,10 +310,46 @@ diamond. With `groups`, sections become collapsible rows.
 | `progress` | `number` | 0–100; renders a solid fill over a translucent track |
 | `color` | `string` | Overrides the section color for this row |
 | `milestone` | `boolean` | Forces a diamond even when `end` is set |
+| `comment` | `string` | Free-form note shown in the bar's detail popup; newlines are preserved |
 
 The time axis picks day/week/month/quarter/year ticks automatically from the
 date range, and dates are localized via `Intl` (`locale="cs-CZ"` → "5. 1.",
 "bře 2026").
+
+**Hover details.** Every bar and milestone carries a detail popup: its name, its
+dates, how many days it spans, a progress bar, what it depends on, what depends
+on it, and its `comment`. Hover a bar to see it, **click to pin it open** — so
+you can point at it while you talk — and click elsewhere or press Escape to
+dismiss it. Tabbing to a bar shows it too, and Space pins it. (Both keys are
+stopped so they don't also drive the deck.)
+
+`comment` is where the "why" goes — what a task is blocked on, who owns it, what
+the risk is. It is plain text: newlines are preserved, markup is not interpreted.
+Keep it to a few lines; a longer one scrolls, which is no use on a projector.
+
+```svelte
+const tasks: GanttTask[] = [
+	{
+		label: 'Migration',
+		start: '2026-03-01',
+		end: '2026-04-15',
+		progress: 60,
+		comment: 'Blocked on the infra team signing off.\nSlipping this moves Launch.'
+	}
+];
+```
+
+Duration counts both end dates, so `start: '2026-01-05', end: '2026-01-23'` reads
+as 19 days — one more than the bar's width in day columns, since the bar itself
+runs midnight to midnight. Dependencies are listed in both directions and stay
+listed under `dependencies={false}`, which hides the *arrows*, not the data. A
+collapsed group's roll-up bar shows the dependencies that cross its boundary and
+no comment — there is no single task under it to have written one.
+
+Because bars are focusable, a chart adds one tab stop per task. `tooltip={false}`
+turns the whole thing off and restores plain bars with a native `title`. Note
+that a `print-pdf` export captures the unpinned state, so comments do not appear
+in the PDF.
 
 **Dependencies.** `dependsOn` resolves against `id` first, then `label` — with no
 ids at all, `dependsOn: 'Design'` works. Arrows route straight when the successor
@@ -353,8 +391,8 @@ side, not by shrinking them. Set `laneHeight` lower to trade that for density.
 
 Label placement is chosen per bar: inside when it fits, otherwise to the right,
 and to the left when the bar runs to the edge of the plot. Labels are clamped to
-the space available and ellipsized, and the bar's hover tooltip always carries
-the full text. Ink is picked by luminance against the bar, so it stays readable
+the space available and ellipsized, and hovering the bar shows the full text in
+its detail popup. Ink is picked by luminance against the bar, so it stays readable
 on both pastel and near-black palettes — but a `color` that is neither hex nor
 `rgb()` (a named color, `hsl()`, `var()`) can't be measured, so its label is
 placed beside the bar rather than on it.

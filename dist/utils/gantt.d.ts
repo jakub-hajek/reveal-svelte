@@ -80,7 +80,7 @@ export interface GanttLabelLayout {
  * The boxes beside the bar stop at `boundLeft`/`boundRight`, so a label can be
  * told to fit the gap its neighbours leave rather than the whole canvas.
  *
- * `'none'` is not data loss: the bar keeps its `title` tooltip.
+ * `'none'` is not data loss: the bar keeps its detail popup.
  */
 export declare function resolveGanttLabel(input: GanttLabelInput): GanttLabelLayout;
 export interface GanttExtent {
@@ -314,3 +314,132 @@ export declare function resolveGanttArrows(edges: readonly GanttEdge[], anchors:
     x: (ms: number) => number;
     rowY: (rowIndex: number, lane: number) => number;
 }): GanttArrowSpec[];
+/** Daylight between a bar's lane band and the popup pointing at it. */
+export declare const GANTT_TOOLTIP_GAP = 8;
+export interface GanttTooltipAnchor {
+    /** px from the plot canvas' left edge — a bar's midpoint, a milestone's centre */
+    x: number;
+    /** px from the canvas' top edge to the top of the bar's lane band */
+    top: number;
+    /** px to the bottom of that band */
+    bottom: number;
+}
+export interface GanttTooltipBounds {
+    /** plot width in px; the popup is clamped inside [0, width] */
+    width: number;
+    /** the canvas' own height — `GanttLayout.totalHeight` */
+    height: number;
+    /** px above the canvas the popup may reach into: the axis strip. Default 0. */
+    headroom?: number;
+}
+export interface GanttTooltipPlacement {
+    placement: 'above' | 'below';
+    /** px from the canvas' left edge */
+    left: number;
+    /** px from the canvas' top edge; null when placed above */
+    top: number | null;
+    /** px from the canvas' bottom edge; null when placed below */
+    bottom: number | null;
+    /** px from the popup's left edge to the caret's centre */
+    arrowOffset: number;
+}
+/**
+ * Where the detail popup goes, in plot-canvas px.
+ *
+ * Deliberately `left` plus one of `top`/`bottom` rather than a
+ * `translateY(-100%)`: anchoring the far edge to the canvas' own far edge is
+ * exact *without knowing how tall the popup renders*. Height is then needed only
+ * to choose a side, where being wrong is cosmetic — which is what lets the
+ * caller pass an estimate and keeps this testable under jsdom.
+ *
+ * Above is preferred on a tie because overflowing upward only overlaps the axis,
+ * while overflowing below `bounds.height` becomes scrollable overflow that
+ * `autoFitSlides` measures and would shrink the whole slide for.
+ */
+export declare function placeGanttTooltip(anchor: GanttTooltipAnchor, 
+/** `height` is an *estimate*: it picks the side only, never the offsets */
+size: {
+    width: number;
+    height: number;
+}, bounds: GanttTooltipBounds): GanttTooltipPlacement;
+export interface GanttTooltipModel {
+    label: string;
+    startMs: number;
+    endMs: number;
+    milestone: boolean;
+    /** whole days the task spans, both ends inclusive; undefined for a milestone */
+    days?: number;
+    progress?: number;
+    /** labels of the tasks this bar follows */
+    predecessors: string[];
+    /** labels of the tasks that follow it */
+    successors: string[];
+    comment?: string;
+    /** true for a group roll-up: a section name, with no single task behind it */
+    summary: boolean;
+}
+/**
+ * Whole days a task spans, counting both end dates.
+ *
+ * Inclusive because `end: '2026-01-23'` means "through the 23rd" to whoever
+ * authored it, and exclusive counting would print "0 days" for a same-day task.
+ * The consequence is that the number is one greater than the bar's width in day
+ * columns, since the bar itself runs midnight to midnight.
+ *
+ * The `Math.max(end - start, DAY_MS)` in `rollUpGanttGroup` is not a precedent
+ * against this: that is a weighting floor for averaging progress, not a count
+ * anyone reads.
+ */
+export declare function ganttDurationDays(startMs: number, endMs: number): number;
+/**
+ * `19 days` / `19 dní`. Via ICU rather than a hand-rolled plural table, which
+ * would get Czech's three-way 1 / 2–4 / 5+ split wrong.
+ */
+export declare function formatGanttDuration(days: number, locale?: string): string;
+export interface GanttTooltipLabels {
+    dependsOn: string;
+    followedBy: string;
+}
+/** The popup's two static captions, matching `unnamedSectionLabel`'s cs/en split. */
+export declare function ganttTooltipLabels(locale?: string): GanttTooltipLabels;
+/**
+ * Everything the popup shows for one bar.
+ *
+ * Dependencies come from `bar.covers` rather than `bar.taskIndex`, which is the
+ * rule `resolveGanttArrows` already applies: for a leaf bar `covers` is just its
+ * own index, and for a group roll-up it drops the edges internal to the group
+ * and keeps the ones crossing its boundary. A roll-up has no comment — there is
+ * no single task under it to have written one.
+ */
+export declare function buildGanttTooltipModel(bar: GanttBarSpec, tasks: readonly GanttTask[], edges: readonly GanttEdge[]): GanttTooltipModel;
+/**
+ * The same content as one flat line, for the bar's `aria-label` and for the
+ * native `title` that `tooltip={false}` falls back to. One function so the
+ * accessible name and the visible popup can never drift apart.
+ */
+export declare function ganttTooltipText(model: GanttTooltipModel, opts: {
+    locale?: string;
+    labels: GanttTooltipLabels;
+}): string;
+export interface GanttTooltipMetrics {
+    /** popup width minus its horizontal padding */
+    innerWidth: number;
+    titleSize: number;
+    fontSize: number;
+    lineHeight: number;
+    /** vertical gap between two blocks */
+    blockGap: number;
+    /** vertical padding plus borders */
+    chrome: number;
+    /** height of the progress row, when there is one */
+    progressHeight: number;
+}
+/**
+ * How tall the popup will render, near enough.
+ *
+ * Only ever used to pick which side of the bar it goes on, so an estimate is
+ * enough — and an estimate is all that is available, since the popup has to be
+ * placed in the same pass that creates it, and `estimateTextWidth` exists
+ * precisely because measuring is impossible under jsdom.
+ */
+export declare function estimateGanttTooltipHeight(model: GanttTooltipModel, metrics: GanttTooltipMetrics): number;

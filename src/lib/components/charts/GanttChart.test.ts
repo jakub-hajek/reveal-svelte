@@ -139,7 +139,7 @@ describe('GanttChart groups', () => {
 		const { container } = render(GanttChart, { props: { tasks: grouped } });
 		expect(container.querySelector('.gantt-group-row')).toBeNull();
 		expect(container.querySelector('.gantt-bar-label')).toBeNull();
-		expect(container.querySelector('button')).toBeNull();
+		expect(container.querySelector('.gantt-group-toggle')).toBeNull();
 	});
 
 	it('gives every section a header row, in first-appearance order', () => {
@@ -450,5 +450,241 @@ describe('GanttChart groups', () => {
 		expect(container.querySelectorAll('.gantt-row').length).toBe(1);
 		// and the bar stops before the diamond's centre instead of running to it
 		expect(pctOf(bar, 'left') + pctOf(bar, 'width')).toBeLessThan(pctOf(gate, 'left'));
+	});
+});
+
+// jsdom has no layout, so nothing here may depend on a measured size — the
+// popup's placement is driven entirely by the layout's own px geometry, and
+// `plotWidth` falls back to the deterministic width - labelWidth (720).
+describe('GanttChart detail popup', () => {
+	const detailed: GanttTask[] = [
+		{ label: 'Design', start: '2026-01-05', end: '2026-01-30' },
+		{
+			label: 'Build',
+			start: '2026-02-02',
+			end: '2026-03-20',
+			progress: 40,
+			dependsOn: 'Design',
+			comment: 'Blocked on\nthe vendor SDK'
+		},
+		{ label: 'Launch', start: '2026-03-27', dependsOn: 'Build' }
+	];
+
+	const bars = (container: Element) => [...container.querySelectorAll('.gantt-bar')];
+	const tipOf = (container: Element) => container.querySelector('.gantt-tooltip');
+
+	it('leaves no native tooltip on a bar, while the gutter keeps its ellipsis aid', () => {
+		const { container } = render(GanttChart, { props: { tasks: detailed } });
+		expect(container.querySelector('.gantt-bar[title], .gantt-milestone[title]')).toBeNull();
+		expect(container.querySelector('.gantt-label[title]')).not.toBeNull();
+	});
+
+	it('names each bar for assistive tech, since its label is a sibling not a child', () => {
+		const { container } = render(GanttChart, { props: { tasks: detailed, locale: 'en' } });
+		const label = bars(container)[1].getAttribute('aria-label') ?? '';
+		expect(label).toContain('Build');
+		expect(label).toContain('40%');
+		expect(label).toContain('Depends on Design');
+	});
+
+	it('opens on focus, with the dates and the duration', async () => {
+		const { container } = render(GanttChart, { props: { tasks: detailed, locale: 'en' } });
+		expect(tipOf(container)).toBeNull();
+
+		await fireEvent.focus(bars(container)[1]);
+		const tip = tipOf(container) as HTMLElement;
+		expect(tip.textContent).toContain('Build');
+		expect(tip.textContent).toContain('Feb 2, 2026');
+		expect(tip.textContent).toContain('Mar 20, 2026');
+		expect(tip.textContent).toContain('47 days');
+	});
+
+	// it must be a child of the canvas: `.gantt-bar` clips its children, and a
+	// positioned overlay inside `.gantt-lane` gets trapped under the arrow SVG
+	it('renders exactly one popup, parented to the canvas', async () => {
+		const { container } = render(GanttChart, { props: { tasks: detailed } });
+		await fireEvent.focus(bars(container)[0]);
+		await fireEvent.focus(bars(container)[1]);
+
+		expect(container.querySelectorAll('.gantt-tooltip').length).toBe(1);
+		expect(tipOf(container)?.parentElement?.classList.contains('gantt-canvas')).toBe(true);
+	});
+
+	it('positions itself in px with one vertical edge pinned and a caret offset', async () => {
+		const { container } = render(GanttChart, { props: { tasks: detailed } });
+		await fireEvent.focus(bars(container)[1]);
+		const style = tipOf(container)?.getAttribute('style') ?? '';
+
+		expect(style).toMatch(/left:\s*[\d.]+px/);
+		expect(style).toMatch(/--gantt-tooltip-arrow:\s*[\d.]+px/);
+		// exactly one of top/bottom — that is what makes the height irrelevant
+		expect(/(^|;)\s*top:/.test(style) !== /(^|;)\s*bottom:/.test(style)).toBe(true);
+	});
+
+	it('waits out the hover delay before opening', async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		try {
+			const { container } = render(GanttChart, { props: { tasks: detailed } });
+			await fireEvent.mouseEnter(bars(container)[1]);
+			expect(tipOf(container)).toBeNull();
+
+			await vi.advanceTimersByTimeAsync(200);
+			expect(tipOf(container)).not.toBeNull();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('pins on click, so the popup survives the pointer leaving the bar', async () => {
+		const { container } = render(GanttChart, { props: { tasks: detailed } });
+		await fireEvent.click(bars(container)[1], { detail: 1 });
+		await fireEvent.mouseLeave(bars(container)[1]);
+
+		expect(tipOf(container)?.classList.contains('is-pinned')).toBe(true);
+		expect(bars(container)[1].getAttribute('aria-expanded')).toBe('true');
+	});
+
+	it('unpins when the same bar is clicked again', async () => {
+		const { container } = render(GanttChart, { props: { tasks: detailed } });
+		await fireEvent.click(bars(container)[1], { detail: 1 });
+		await fireEvent.click(bars(container)[1], { detail: 1 });
+		expect(tipOf(container)).toBeNull();
+	});
+
+	it('re-pins to another bar clicked while one is pinned', async () => {
+		const { container } = render(GanttChart, { props: { tasks: detailed, locale: 'en' } });
+		await fireEvent.click(bars(container)[1], { detail: 1 });
+		await fireEvent.click(bars(container)[0], { detail: 1 });
+
+		expect(tipOf(container)?.textContent).toContain('Design');
+		expect(bars(container)[1].getAttribute('aria-expanded')).toBe('false');
+	});
+
+	it('unpins on a click outside the chart', async () => {
+		const { container } = render(GanttChart, { props: { tasks: detailed } });
+		await fireEvent.click(bars(container)[1], { detail: 1 });
+		await fireEvent.mouseDown(document.body);
+		expect(tipOf(container)).toBeNull();
+	});
+
+	// reveal binds Escape to the slide overview
+	it('closes on Escape without letting the event reach reveal', async () => {
+		const onDocumentKey = vi.fn();
+		document.addEventListener('keydown', onDocumentKey);
+		const { container } = render(GanttChart, { props: { tasks: detailed } });
+
+		await fireEvent.click(bars(container)[1], { detail: 1 });
+		await fireEvent.keyDown(bars(container)[1], { key: 'Escape' });
+
+		expect(tipOf(container)).toBeNull();
+		expect(onDocumentKey).not.toHaveBeenCalled();
+		document.removeEventListener('keydown', onDocumentKey);
+	});
+
+	it('lets Escape through to reveal when there is nothing to close', async () => {
+		const onDocumentKey = vi.fn();
+		document.addEventListener('keydown', onDocumentKey);
+		const { container } = render(GanttChart, { props: { tasks: detailed } });
+
+		await fireEvent.keyDown(bars(container)[1], { key: 'Escape' });
+		expect(onDocumentKey).toHaveBeenCalled();
+		document.removeEventListener('keydown', onDocumentKey);
+	});
+
+	// reveal binds Space to "next slide" and does not exempt focused buttons
+	it('pins on Space without advancing the deck', async () => {
+		const onDocumentKey = vi.fn();
+		document.addEventListener('keydown', onDocumentKey);
+		const { container } = render(GanttChart, { props: { tasks: detailed } });
+
+		await fireEvent.keyDown(bars(container)[1], { key: ' ' });
+		expect(tipOf(container)?.classList.contains('is-pinned')).toBe(true);
+		expect(onDocumentKey).not.toHaveBeenCalled();
+		document.removeEventListener('keydown', onDocumentKey);
+	});
+
+	it('does not toggle twice for the click a button synthesizes from Enter', async () => {
+		const { container } = render(GanttChart, { props: { tasks: detailed } });
+		await fireEvent.keyDown(bars(container)[1], { key: 'Enter' });
+		await fireEvent.click(bars(container)[1], { detail: 0 });
+		expect(bars(container)[1].getAttribute('aria-expanded')).toBe('true');
+	});
+
+	it('keeps the newlines the author wrote in a comment', async () => {
+		const { container } = render(GanttChart, { props: { tasks: detailed } });
+		await fireEvent.focus(bars(container)[1]);
+		expect(container.querySelector('.gantt-tooltip-comment')?.textContent).toBe(
+			'Blocked on\nthe vendor SDK'
+		);
+	});
+
+	it('lists dependencies in both directions', async () => {
+		const { container } = render(GanttChart, { props: { tasks: detailed, locale: 'en' } });
+		await fireEvent.focus(bars(container)[1]);
+		const deps = [...container.querySelectorAll('.gantt-tooltip-deps')].map((el) =>
+			el.textContent?.replace(/\s+/g, ' ').trim()
+		);
+		expect(deps).toEqual(['Depends on Design', 'Followed by Launch']);
+	});
+
+	// `dependencies` hides the arrows; it does not throw the data away
+	it('still lists dependencies when the arrows are switched off', async () => {
+		const { container } = render(GanttChart, {
+			props: { tasks: detailed, locale: 'en', dependencies: false }
+		});
+		await fireEvent.focus(bars(container)[1]);
+		expect(container.querySelectorAll('.gantt-tooltip-deps').length).toBe(2);
+	});
+
+	it('shows a zero progress rather than hiding the bar', async () => {
+		const { container } = render(GanttChart, {
+			props: { tasks: [{ label: 'Idle', start: '2026-01-05', end: '2026-01-30', progress: 0 }] }
+		});
+		await fireEvent.focus(bars(container)[0]);
+		expect(container.querySelector('.gantt-tooltip-pct')?.textContent).toBe('0%');
+	});
+
+	it('gives a group roll-up its section name and no comment', async () => {
+		const { container } = render(GanttChart, {
+			props: {
+				tasks: [
+					{ label: 'Research', start: '2026-01-05', end: '2026-01-30', section: 'Discovery' },
+					{ label: 'Spec', start: '2026-02-02', end: '2026-02-27', section: 'Discovery' }
+				],
+				groups: true,
+				collapsed: false,
+				summaryBar: true
+			}
+		});
+		const roll = container.querySelector('.gantt-bar.is-summary') as HTMLElement;
+		await fireEvent.focus(roll);
+
+		expect(container.querySelector('.gantt-tooltip-title')?.textContent).toBe('Discovery');
+		expect(container.querySelector('.gantt-tooltip-comment')).toBeNull();
+	});
+
+	it('clears a pinned popup when a group toggle rebuilds the layout under it', async () => {
+		const { container, getByTitle } = render(GanttChart, {
+			props: {
+				tasks: [
+					{ label: 'Research', start: '2026-01-05', end: '2026-01-30', section: 'Discovery' },
+					{ label: 'Spec', start: '2026-02-02', end: '2026-02-27', section: 'Discovery' }
+				],
+				groups: true,
+				collapsed: true
+			}
+		});
+		await fireEvent.click(bars(container)[0], { detail: 1 });
+		expect(tipOf(container)).not.toBeNull();
+
+		await fireEvent.click(getByTitle('Discovery'), { detail: 1 });
+		expect(tipOf(container)).toBeNull();
+	});
+
+	it('gives the bars back as plain divs when the popup is switched off', () => {
+		const { container } = render(GanttChart, { props: { tasks: detailed, tooltip: false } });
+		expect(container.querySelector('button')).toBeNull();
+		expect(container.querySelector('.gantt-tooltip')).toBeNull();
+		expect(container.querySelector('.gantt-bar')?.getAttribute('title')).toContain('Design');
 	});
 });

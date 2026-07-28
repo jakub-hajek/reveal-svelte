@@ -4,18 +4,31 @@
 	import { getThemeChartColors } from '../../utils/chartHelpers';
 	import {
 		buildGanttAnchorMap,
+		buildGanttTooltipModel,
 		buildGanttTree,
 		computeGanttScale,
+		estimateGanttTooltipHeight,
 		formatGanttDate,
+		formatGanttDuration,
 		ganttArrowHead,
 		ganttDependencyPath,
 		ganttLabelInk,
+		ganttTooltipLabels,
+		ganttTooltipText,
 		GANTT_MILESTONE_HALF,
 		layoutGanttRows,
+		placeGanttTooltip,
 		resolveGanttArrows,
 		toUTCms
 	} from '../../utils/gantt';
-	import type { GanttBarSpec, GanttEdge, GanttItem, GanttLane, GanttRow } from '../../utils/gantt';
+	import type {
+		GanttBarSpec,
+		GanttEdge,
+		GanttItem,
+		GanttLane,
+		GanttRow,
+		GanttTooltipModel
+	} from '../../utils/gantt';
 	import type { GanttTask } from '../../types/charts';
 
 	let {
@@ -28,6 +41,8 @@
 		collapsed = true,
 		summaryBar = false,
 		legend = undefined,
+		tooltip = true,
+		tooltipWidth = 260,
 		width = 900,
 		rowHeight = 36,
 		laneHeight = undefined,
@@ -44,6 +59,8 @@
 		collapsed?: boolean | string[];
 		summaryBar?: boolean;
 		legend?: boolean;
+		tooltip?: boolean;
+		tooltipWidth?: number;
 		width?: number;
 		rowHeight?: number;
 		laneHeight?: number;
@@ -56,6 +73,15 @@
 	/** matches `.gantt-bar-label` padding in the stylesheet below */
 	const LABEL_PAD_INSIDE = 8;
 	const LABEL_GAP_OUTSIDE = 6;
+	/**
+	 * Long enough that sweeping the pointer across a collapsed group's packed
+	 * lanes doesn't strobe a popup for every bar on the way.
+	 */
+	const TOOLTIP_DELAY_MS = 120;
+	/** matches `.gantt-axis { height: 26px }` in the stylesheet below */
+	const AXIS_HEIGHT = 26;
+	/** matches `.gantt-tooltip` padding in the stylesheet below */
+	const TOOLTIP_PAD_X = 10;
 
 	const uid = $props.id();
 
@@ -85,6 +111,23 @@
 	let figureEl: HTMLElement | undefined = $state();
 	let canvasWidth = $state(0);
 	let toggling = $state(false);
+
+	/**
+	 * Which bar the popup is describing, keyed by `GanttBarSpec.key` — never by
+	 * row/lane index, which `layout` invalidates on every resize and every group
+	 * toggle. (The key is `t:<taskIndex>` or `g:<section>:roll`, unique unless a
+	 * section is literally named `t:3`.)
+	 *
+	 * Pin beats hover: reaching a pinned popup with the pointer means crossing
+	 * other bars, so letting hover win would close the thing you're reaching for.
+	 */
+	let hoverKey: string | null = $state(null);
+	let pinnedKey: string | null = $state(null);
+	let tipEl: HTMLDivElement | undefined = $state();
+	// plain `let`: read only from handlers, never rendered
+	let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+
+	const activeKey = $derived(pinnedKey ?? hoverKey);
 
 	onMount(() => {
 		chartColors = getThemeChartColors();
@@ -232,14 +275,6 @@
 		return bar.color ?? sectionColor(bar.section ?? '');
 	}
 
-	function barTitle(bar: GanttBarSpec): string {
-		const range = bar.milestone
-			? formatGanttDate(bar.startMs, locale)
-			: `${formatGanttDate(bar.startMs, locale)} – ${formatGanttDate(bar.endMs, locale)}`;
-		const progress = bar.progress != null ? ` · ${bar.progress}%` : '';
-		return `${bar.label}: ${range}${progress}`;
-	}
-
 	function clampProgress(value: number): number {
 		return Math.min(Math.max(value, 0), 100);
 	}
@@ -254,6 +289,11 @@
 	async function toggle(section: string | undefined) {
 		if (!section) return;
 		if (!collapsedKeys.delete(section)) collapsedKeys.add(section);
+
+		// the bar it pointed at may be about to disappear, and a popup overhanging
+		// the slide's bottom edge would be measured by the refit dispatched below
+		pinnedKey = null;
+		hoverKey = null;
 
 		// the arrow layer is one SVG sized to the whole chart, so it can't follow a
 		// height animation — blink it out instead and let the geometry snap
@@ -333,6 +373,191 @@
 			barX: lane.barX,
 			barWidth: lane.barWidth
 		});
+	}
+
+	// -----------------------------------------------------------------------
+	// Detail popup
+	// -----------------------------------------------------------------------
+
+	const tipLabels = $derived(
+		ganttTooltipLabels(locale ?? (typeof navigator !== 'undefined' ? navigator.language : 'en'))
+	);
+
+	function tooltipModel(bar: GanttBarSpec): GanttTooltipModel {
+		return buildGanttTooltipModel(bar, tasks, edges);
+	}
+
+	/** The one-line form, for the bar's accessible name and the `tooltip={false}` title. */
+	function barSummary(bar: GanttBarSpec): string {
+		return ganttTooltipText(tooltipModel(bar), { locale, labels: tipLabels });
+	}
+
+	/**
+	 * One string rather than two dates around a literal dash in the markup: the
+	 * space before the dash is significant, and markup whitespace around an
+	 * `{#if}` is not something to stake typography on.
+	 */
+	function tipRange(model: GanttTooltipModel): string {
+		return model.milestone
+			? formatGanttDate(model.startMs, locale)
+			: `${formatGanttDate(model.startMs, locale)} – ${formatGanttDate(model.endMs, locale)}`;
+	}
+
+	/** Re-found each pass: `layout` is rebuilt on resize and on every group toggle. */
+	const activeLane = $derived.by(() => {
+		if (!activeKey) return null;
+		for (let i = 0; i < layout.rows.length; i += 1) {
+			const lane = layout.rows[i].lanes.find((candidate) => candidate.bar.key === activeKey);
+			if (lane) return { row: layout.rows[i], lane };
+		}
+		// the bar collapsed away under us — drop the popup rather than strand it
+		return null;
+	});
+
+	const tip = $derived.by(() => {
+		const found = activeLane;
+		if (!found || !scale || !plotWidth) return null;
+
+		const { row, lane } = found;
+		const model = tooltipModel(lane.bar);
+		const band = laneBand(row, lane.lane);
+		/*
+		 * Anchored to the bar's midpoint and to its lane *band*, not to the
+		 * pointer and not to the bar's painted edges: `clientX` arrives in
+		 * reveal's scaled coordinate space and there is no pointer at all on the
+		 * focus path, while the bar's height is `--gantt-bar-thickness`, a CSS
+		 * percentage this script can't read.
+		 */
+		const place = placeGanttTooltip(
+			{
+				x: lane.bar.milestone ? lane.barX : lane.barX + lane.barWidth / 2,
+				top: row.y + band.top,
+				bottom: row.y + band.top + band.height
+			},
+			{
+				width: tooltipWidth,
+				height: estimateGanttTooltipHeight(model, {
+					innerWidth: tooltipWidth - 2 * TOOLTIP_PAD_X,
+					titleSize: 13,
+					fontSize: 12,
+					lineHeight: 17,
+					blockGap: 6,
+					chrome: 18,
+					progressHeight: 14
+				})
+			},
+			{ width: plotWidth, height: layout.totalHeight, headroom: AXIS_HEIGHT }
+		);
+
+		return { model, place, color: barColor(lane.bar) };
+	});
+
+	function showTip(key: string) {
+		clearTimeout(hoverTimer);
+		hoverKey = key;
+	}
+
+	function showTipSoon(key: string) {
+		clearTimeout(hoverTimer);
+		hoverTimer = setTimeout(() => {
+			hoverKey = key;
+		}, TOOLTIP_DELAY_MS);
+	}
+
+	function hideTip(key: string) {
+		clearTimeout(hoverTimer);
+		if (hoverKey === key) hoverKey = null;
+	}
+
+	function togglePin(key: string) {
+		pinnedKey = pinnedKey === key ? null : key;
+		hoverKey = null;
+	}
+
+	$effect(() => () => clearTimeout(hoverTimer));
+
+	/*
+	 * Only mounted while something is pinned, so Escape reaches reveal — which
+	 * binds it to the slide overview — every other time. Capture phase on
+	 * `window` runs ahead of reveal's own document listener, which is what makes
+	 * `stopPropagation` actually suppress it.
+	 */
+	$effect(() => {
+		if (pinnedKey == null) return;
+
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key !== 'Escape') return;
+			event.preventDefault();
+			event.stopPropagation();
+			pinnedKey = null;
+		};
+		const onDown = (event: MouseEvent) => {
+			const target = event.target as Element | null;
+			if (!target) return;
+			if (tipEl?.contains(target)) return;
+			// a bar in *this* chart re-pins through its own handler; the guard is
+			// what keeps a second chart on the slide from unpinning this one
+			if (figureEl?.contains(target) && target.closest('.gantt-bar, .gantt-milestone')) return;
+			pinnedKey = null;
+		};
+
+		window.addEventListener('keydown', onKey, true);
+		window.addEventListener('mousedown', onDown, true);
+		return () => {
+			window.removeEventListener('keydown', onKey, true);
+			window.removeEventListener('mousedown', onDown, true);
+		};
+	});
+
+	/**
+	 * Reveal binds Space to "next slide" and Escape to the overview, and exempts
+	 * neither for a focused button — the same trap `onToggleKey` above works
+	 * around. Escape is only swallowed when there is actually a popup to close.
+	 */
+	function onBarKey(key: string) {
+		return (event: KeyboardEvent) => {
+			if (event.key === 'Escape') {
+				if (pinnedKey == null && hoverKey == null) return;
+				event.preventDefault();
+				event.stopPropagation();
+				pinnedKey = null;
+				hoverKey = null;
+				return;
+			}
+			if (event.key !== ' ' && event.key !== 'Enter') return;
+			event.preventDefault();
+			event.stopPropagation();
+			togglePin(key);
+		};
+	}
+
+	/**
+	 * A bar is a `<button>` only when it has a popup to open. Without one it goes
+	 * back to being a plain div — one tab stop per task is a real cost on a slide
+	 * that has other controls on it.
+	 */
+	const barTag = $derived(tooltip ? 'button' : 'div');
+
+	function barAttrs(bar: GanttBarSpec) {
+		if (!tooltip) return { title: barSummary(bar) };
+		return {
+			type: 'button' as const,
+			// the bar has no text child — `.gantt-bar-label` is a sibling — so this
+			// is its whole accessible name, exactly what `title` used to supply
+			'aria-label': barSummary(bar),
+			// pinned, not merely hovered: otherwise every bar reads as expanded
+			'aria-expanded': pinnedKey === bar.key,
+			// enter/leave rather than over/out: they don't bubble between lanes
+			onmouseenter: () => showTipSoon(bar.key),
+			onmouseleave: () => hideTip(bar.key),
+			onfocus: () => showTip(bar.key),
+			onblur: () => hideTip(bar.key),
+			// `detail > 0` for the same reason as the group toggle: a button
+			// synthesises a detail-0 click from Enter and Space, and `onBarKey`
+			// has already toggled by then
+			onclick: (event: MouseEvent) => event.detail > 0 && togglePin(bar.key),
+			onkeydown: onBarKey(bar.key)
+		};
 	}
 </script>
 
@@ -422,33 +647,39 @@
 							{#each row.lanes as lane (lane.bar.key)}
 								{@const bar = lane.bar}
 								{@const band = laneBand(row, lane.lane)}
-							{@const box = laneBox(lane)}
+								{@const box = laneBox(lane)}
 								<div class="gantt-lane" style="top: {band.top}px; height: {band.height}px;">
 									{#if bar.milestone}
-										<div
+										<svelte:element
+											this={barTag}
 											class="gantt-milestone"
 											class:is-summary={bar.summary}
+											class:is-active={activeKey === bar.key}
 											style="left: {box.startPct}%; background: {barColor(bar)};"
-											title={barTitle(bar)}
-										></div>
+											{...barAttrs(bar)}
+										></svelte:element>
 									{:else}
-										<div
+										<svelte:element
+											this={barTag}
 											class="gantt-bar"
 											class:is-summary={bar.summary}
 											class:abuts={lane.abuts}
+											class:is-active={activeKey === bar.key}
 											style="left: {box.startPct}%; width: {box.endPct -
 												box.startPct}%; background: {bar.progress != null
 												? `color-mix(in srgb, ${barColor(bar)} 30%, transparent)`
 												: barColor(bar)};"
-											title={barTitle(bar)}
+											{...barAttrs(bar)}
 										>
+											<!-- a span, not a div: the bar is a button, whose content
+											     model is phrasing only -->
 											{#if bar.progress != null}
-												<div
+												<span
 													class="gantt-progress"
 													style="width: {clampProgress(bar.progress)}%; background: {barColor(bar)};"
-												></div>
+												></span>
 											{/if}
-										</div>
+										</svelte:element>
 									{/if}
 									<!-- sibling of the bar, never a child: `.gantt-bar` clips its overflow -->
 									{#if lane.label.placement !== 'none'}
@@ -479,6 +710,62 @@
 								<path class="gantt-arrow-head" d={arrow.head} />
 							{/each}
 						</svg>
+					{/if}
+					<!--
+						One instance, and a child of the canvas rather than of a lane:
+						`.gantt-bar` clips its children, and any positioned overlay inside
+						`.gantt-lane` repeats the stacking-context trap documented at the
+						bottom of this stylesheet. `aria-hidden` because it says exactly
+						what each bar's `aria-label` already says.
+					-->
+					{#if tip}
+						<div
+							bind:this={tipEl}
+							class="gantt-tooltip is-{tip.place.placement}"
+							class:is-pinned={pinnedKey != null}
+							aria-hidden="true"
+							style="left: {tip.place.left}px; {tip.place.placement === 'above'
+								? `bottom: ${tip.place.bottom}px`
+								: `top: ${tip.place.top}px`}; width: {tooltipWidth}px; --gantt-tooltip-arrow: {tip
+								.place.arrowOffset}px;"
+						>
+							<!-- the scroll clip lives here, not on the popup: `overflow` on the
+							     popup itself would cut off the caret hanging off its edge -->
+							<div class="gantt-tooltip-body">
+								<p class="gantt-tooltip-title">{tip.model.label}</p>
+							<p class="gantt-tooltip-dates">
+								{tipRange(tip.model)}{#if tip.model.days != null}<span class="gantt-tooltip-sep"
+										>·</span
+									>{formatGanttDuration(tip.model.days, locale)}{/if}
+							</p>
+							{#if tip.model.progress != null}
+								<div class="gantt-tooltip-progress">
+									<span class="gantt-tooltip-track">
+										<span
+											class="gantt-tooltip-fill"
+											style="width: {clampProgress(tip.model.progress)}%; background: {tip.color};"
+										></span>
+									</span>
+									<span class="gantt-tooltip-pct">{clampProgress(tip.model.progress)}%</span>
+								</div>
+							{/if}
+							{#if tip.model.predecessors.length}
+								<p class="gantt-tooltip-deps">
+									<span class="gantt-tooltip-key">{tipLabels.dependsOn}</span>
+									{tip.model.predecessors.join(', ')}
+								</p>
+							{/if}
+							{#if tip.model.successors.length}
+								<p class="gantt-tooltip-deps">
+									<span class="gantt-tooltip-key">{tipLabels.followedBy}</span>
+									{tip.model.successors.join(', ')}
+								</p>
+							{/if}
+								{#if tip.model.comment}
+									<p class="gantt-tooltip-comment">{tip.model.comment}</p>
+								{/if}
+							</div>
+						</div>
 					{/if}
 				</div>
 			</div>
@@ -792,7 +1079,7 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		/* the bar underneath owns the tooltip */
+		/* the bar underneath owns the hover popup */
 		pointer-events: none;
 	}
 
@@ -821,11 +1108,168 @@
 			0 0 2px var(--theme-bg, #1e1e2e);
 	}
 
+	/* ------------------------------------------------------------------
+	   Detail popup
+	   ------------------------------------------------------------------ */
+
+	/*
+	 * Explicit reset rather than `all: unset`, which would drop the box model the
+	 * absolute positioning above depends on — the same reasoning as on
+	 * `.gantt-group-toggle`. `cursor: default`: a bar opens a popup, it doesn't
+	 * navigate anywhere.
+	 */
+	button.gantt-bar,
+	button.gantt-milestone {
+		appearance: none;
+		padding: 0;
+		border: 0;
+		font: inherit;
+		color: inherit;
+		cursor: default;
+	}
+
+	button.gantt-bar:focus-visible,
+	button.gantt-milestone:focus-visible {
+		outline: 2px solid var(--theme-primary, #888);
+		outline-offset: 2px;
+	}
+
+	.gantt-bar.is-active,
+	.gantt-milestone.is-active {
+		filter: brightness(1.12);
+	}
+
+	.gantt-progress {
+		display: block;
+	}
+
+	.gantt-tooltip {
+		position: absolute;
+		/* over `.gantt-arrows` and over `.gantt-bar-label`'s own z-index: 1 */
+		z-index: 2;
+		box-sizing: border-box;
+		padding: 8px 10px;
+		border-radius: 6px;
+		border: 1px solid var(--gantt-tooltip-border, var(--theme-border, #6c7086));
+		/* must stay opaque: bars and gridlines run underneath it */
+		background: var(--gantt-tooltip-bg, var(--theme-surface-0, #313244));
+		color: var(--gantt-tooltip-color, var(--theme-text, #cdd6f4));
+		box-shadow: var(--gantt-tooltip-shadow, 0 6px 18px rgb(0 0 0 / 0.35));
+		font-size: var(--gantt-tooltip-font-size, 12px);
+		line-height: 1.4;
+		/* slides centre their text; a detail panel reads as a block */
+		text-align: left;
+		/*
+		 * Transient by default, so it can never steal the hover from the bar it is
+		 * describing — which is what removes the need for a hover bridge or a
+		 * close delay. Pinning is the moment it becomes a thing you can point at.
+		 */
+		pointer-events: none;
+	}
+
+	.gantt-tooltip.is-pinned {
+		pointer-events: auto;
+		user-select: text;
+	}
+
+	/*
+	 * The clip lives on the body rather than the popup: `overflow` on the popup
+	 * would take the caret hanging off its edge with it.
+	 */
+	.gantt-tooltip-body {
+		max-height: var(--gantt-tooltip-max-height, 320px);
+		overflow: hidden;
+	}
+
+	.gantt-tooltip.is-pinned .gantt-tooltip-body {
+		overflow-y: auto;
+	}
+
+	.gantt-tooltip p {
+		margin: 0;
+	}
+
+	.gantt-tooltip-body > * + * {
+		margin-top: 6px;
+	}
+
+	.gantt-tooltip-title {
+		font-size: 13px;
+		font-weight: 600;
+	}
+
+	.gantt-tooltip-dates,
+	.gantt-tooltip-deps {
+		color: var(--gantt-tooltip-muted, var(--theme-subtext, #bac2de));
+	}
+
+	.gantt-tooltip-sep {
+		margin: 0 6px;
+		opacity: 0.6;
+	}
+
+	.gantt-tooltip-key {
+		color: var(--theme-muted, #888);
+	}
+
+	.gantt-tooltip-progress {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.gantt-tooltip-track {
+		flex: 1;
+		height: 6px;
+		border-radius: 3px;
+		background: var(--theme-surface-1, #45475a);
+		overflow: hidden;
+	}
+
+	.gantt-tooltip-fill {
+		display: block;
+		height: 100%;
+		border-radius: 3px;
+	}
+
+	.gantt-tooltip-pct {
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* the author's newlines are content; wrapping still applies on top */
+	.gantt-tooltip-comment {
+		white-space: pre-line;
+	}
+
+	/* a rotated square, so the caret inherits the popup's fill exactly */
+	.gantt-tooltip::after {
+		content: '';
+		position: absolute;
+		left: var(--gantt-tooltip-arrow, 50%);
+		width: 8px;
+		height: 8px;
+		background: inherit;
+		transform: translateX(-50%) rotate(45deg);
+	}
+
+	.gantt-tooltip.is-above::after {
+		bottom: -5px;
+		border-right: 1px solid var(--gantt-tooltip-border, var(--theme-border, #6c7086));
+		border-bottom: 1px solid var(--gantt-tooltip-border, var(--theme-border, #6c7086));
+	}
+
+	.gantt-tooltip.is-below::after {
+		top: -5px;
+		border-left: 1px solid var(--gantt-tooltip-border, var(--theme-border, #6c7086));
+		border-top: 1px solid var(--gantt-tooltip-border, var(--theme-border, #6c7086));
+	}
+
 	/*
 	 * Deliberately no entrance animation on `.gantt-lane`: animating opacity or
 	 * transform would make it a stacking context, trapping `.gantt-bar-label`'s
 	 * z-index inside the lane so labels could never paint above the arrow
-	 * overlay. Toggling reads fine on the arrow blink alone.
+	 * overlay — and now the popup depends on the same invariant. Toggling reads
+	 * fine on the arrow blink alone.
 	 */
 	.gantt-arrows {
 		transition: opacity 120ms ease;

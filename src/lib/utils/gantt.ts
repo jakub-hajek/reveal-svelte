@@ -267,7 +267,7 @@ function barSpan(input: {
  * The boxes beside the bar stop at `boundLeft`/`boundRight`, so a label can be
  * told to fit the gap its neighbours leave rather than the whole canvas.
  *
- * `'none'` is not data loss: the bar keeps its `title` tooltip.
+ * `'none'` is not data loss: the bar keeps its detail popup.
  */
 export function resolveGanttLabel(input: GanttLabelInput): GanttLabelLayout {
 	const { text, plotWidth, fontSize } = input;
@@ -896,8 +896,9 @@ function abuttingBars(
  *
  * A label must not cost a lane merely to stay whole — it can truncate. Being
  * dropped is different: an unlabelled bar in a collapsed group is a bar with
- * nothing on the slide to say what it is, and the tooltip that remains is no use
- * to a room watching a projector. So these get the lane after all.
+ * nothing on the slide to say what it is, and the popup that remains only shows
+ * up on hover — no use to a room watching a projector. So these get the lane
+ * after all.
  */
 function labellessBars(
 	bars: readonly GanttBarSpec[],
@@ -1141,4 +1142,287 @@ export function resolveGanttArrows(
 	}
 
 	return arrows;
+}
+
+// ---------------------------------------------------------------------------
+// Detail popup
+//
+// The popup replaces the browser's native `title` tooltip, which renders in the
+// OS font at the OS size after a second of hovering — no use to a room watching
+// a projector, and no room for more than one line.
+//
+// Everything here is pure and px-based, in plot-canvas coordinates, because the
+// chart lives inside a reveal slide that autofit CSS-scales: a measured
+// `getBoundingClientRect` would come back in scaled units, whereas the layout's
+// own geometry is already in the space the popup is painted in.
+// ---------------------------------------------------------------------------
+
+/** Daylight between a bar's lane band and the popup pointing at it. */
+export const GANTT_TOOLTIP_GAP = 8;
+/** How close the caret may come to the popup's rounded corner. */
+const TOOLTIP_ARROW_INSET = 14;
+
+export interface GanttTooltipAnchor {
+	/** px from the plot canvas' left edge — a bar's midpoint, a milestone's centre */
+	x: number;
+	/** px from the canvas' top edge to the top of the bar's lane band */
+	top: number;
+	/** px to the bottom of that band */
+	bottom: number;
+}
+
+export interface GanttTooltipBounds {
+	/** plot width in px; the popup is clamped inside [0, width] */
+	width: number;
+	/** the canvas' own height — `GanttLayout.totalHeight` */
+	height: number;
+	/** px above the canvas the popup may reach into: the axis strip. Default 0. */
+	headroom?: number;
+}
+
+export interface GanttTooltipPlacement {
+	placement: 'above' | 'below';
+	/** px from the canvas' left edge */
+	left: number;
+	/** px from the canvas' top edge; null when placed above */
+	top: number | null;
+	/** px from the canvas' bottom edge; null when placed below */
+	bottom: number | null;
+	/** px from the popup's left edge to the caret's centre */
+	arrowOffset: number;
+}
+
+/**
+ * Where the detail popup goes, in plot-canvas px.
+ *
+ * Deliberately `left` plus one of `top`/`bottom` rather than a
+ * `translateY(-100%)`: anchoring the far edge to the canvas' own far edge is
+ * exact *without knowing how tall the popup renders*. Height is then needed only
+ * to choose a side, where being wrong is cosmetic — which is what lets the
+ * caller pass an estimate and keeps this testable under jsdom.
+ *
+ * Above is preferred on a tie because overflowing upward only overlaps the axis,
+ * while overflowing below `bounds.height` becomes scrollable overflow that
+ * `autoFitSlides` measures and would shrink the whole slide for.
+ */
+export function placeGanttTooltip(
+	anchor: GanttTooltipAnchor,
+	/** `height` is an *estimate*: it picks the side only, never the offsets */
+	size: { width: number; height: number },
+	bounds: GanttTooltipBounds
+): GanttTooltipPlacement {
+	const round = (n: number) => Math.round(n * 100) / 100;
+
+	const left = clamp(anchor.x - size.width / 2, 0, Math.max(bounds.width - size.width, 0));
+	const roomAbove = anchor.top + (bounds.headroom ?? 0) - GANTT_TOOLTIP_GAP;
+	const roomBelow = bounds.height - anchor.bottom - GANTT_TOOLTIP_GAP;
+	const above = roomAbove >= size.height || roomAbove >= roomBelow;
+
+	const inset = Math.min(TOOLTIP_ARROW_INSET, size.width / 2);
+
+	return {
+		placement: above ? 'above' : 'below',
+		left: round(left),
+		top: above ? null : round(anchor.bottom + GANTT_TOOLTIP_GAP),
+		bottom: above ? round(bounds.height - anchor.top + GANTT_TOOLTIP_GAP) : null,
+		arrowOffset: round(clamp(anchor.x - left, inset, size.width - inset))
+	};
+}
+
+export interface GanttTooltipModel {
+	label: string;
+	startMs: number;
+	endMs: number;
+	milestone: boolean;
+	/** whole days the task spans, both ends inclusive; undefined for a milestone */
+	days?: number;
+	progress?: number;
+	/** labels of the tasks this bar follows */
+	predecessors: string[];
+	/** labels of the tasks that follow it */
+	successors: string[];
+	comment?: string;
+	/** true for a group roll-up: a section name, with no single task behind it */
+	summary: boolean;
+}
+
+/**
+ * Whole days a task spans, counting both end dates.
+ *
+ * Inclusive because `end: '2026-01-23'` means "through the 23rd" to whoever
+ * authored it, and exclusive counting would print "0 days" for a same-day task.
+ * The consequence is that the number is one greater than the bar's width in day
+ * columns, since the bar itself runs midnight to midnight.
+ *
+ * The `Math.max(end - start, DAY_MS)` in `rollUpGanttGroup` is not a precedent
+ * against this: that is a weighting floor for averaging progress, not a count
+ * anyone reads.
+ */
+export function ganttDurationDays(startMs: number, endMs: number): number {
+	return Math.max(1, Math.round((endMs - startMs) / DAY_MS) + 1);
+}
+
+/**
+ * `19 days` / `19 dní`. Via ICU rather than a hand-rolled plural table, which
+ * would get Czech's three-way 1 / 2–4 / 5+ split wrong.
+ */
+export function formatGanttDuration(days: number, locale?: string): string {
+	try {
+		return new Intl.NumberFormat(locale, {
+			style: 'unit',
+			unit: 'day',
+			unitDisplay: 'long'
+		}).format(days);
+	} catch {
+		// engines without `style: 'unit'`
+		return `${days} d`;
+	}
+}
+
+export interface GanttTooltipLabels {
+	dependsOn: string;
+	followedBy: string;
+}
+
+/** The popup's two static captions, matching `unnamedSectionLabel`'s cs/en split. */
+export function ganttTooltipLabels(locale?: string): GanttTooltipLabels {
+	const lang = (locale ?? 'en').split('-')[0].toLowerCase();
+	return lang === 'cs'
+		? { dependsOn: 'Navazuje na', followedBy: 'Předchází' }
+		: { dependsOn: 'Depends on', followedBy: 'Followed by' };
+}
+
+/** Task labels on the far end of `edges`, in edge order, without repeats. */
+function depLabels(
+	edges: readonly GanttEdge[],
+	tasks: readonly GanttTask[],
+	covers: ReadonlySet<number>,
+	near: 'toTask' | 'fromTask'
+): string[] {
+	const far = near === 'toTask' ? 'fromTask' : 'toTask';
+	const seen = new Set<number>();
+	const out: string[] = [];
+	for (const edge of edges) {
+		// edges wholly inside this bar describe nothing the reader can see
+		if (!covers.has(edge[near]) || covers.has(edge[far])) continue;
+		if (seen.has(edge[far])) continue;
+		seen.add(edge[far]);
+		const label = tasks[edge[far]]?.label;
+		if (label) out.push(label);
+	}
+	return out;
+}
+
+/**
+ * Everything the popup shows for one bar.
+ *
+ * Dependencies come from `bar.covers` rather than `bar.taskIndex`, which is the
+ * rule `resolveGanttArrows` already applies: for a leaf bar `covers` is just its
+ * own index, and for a group roll-up it drops the edges internal to the group
+ * and keeps the ones crossing its boundary. A roll-up has no comment — there is
+ * no single task under it to have written one.
+ */
+export function buildGanttTooltipModel(
+	bar: GanttBarSpec,
+	tasks: readonly GanttTask[],
+	edges: readonly GanttEdge[]
+): GanttTooltipModel {
+	const covers = new Set(bar.covers);
+	return {
+		label: bar.label,
+		startMs: bar.startMs,
+		endMs: bar.endMs,
+		milestone: bar.milestone,
+		days: bar.milestone ? undefined : ganttDurationDays(bar.startMs, bar.endMs),
+		progress: bar.progress,
+		predecessors: depLabels(edges, tasks, covers, 'toTask'),
+		successors: depLabels(edges, tasks, covers, 'fromTask'),
+		comment: bar.taskIndex >= 0 ? tasks[bar.taskIndex]?.comment : undefined,
+		summary: bar.summary
+	};
+}
+
+/**
+ * The same content as one flat line, for the bar's `aria-label` and for the
+ * native `title` that `tooltip={false}` falls back to. One function so the
+ * accessible name and the visible popup can never drift apart.
+ */
+export function ganttTooltipText(
+	model: GanttTooltipModel,
+	opts: { locale?: string; labels: GanttTooltipLabels }
+): string {
+	const { locale, labels } = opts;
+	const parts: string[] = [
+		model.milestone
+			? formatGanttDate(model.startMs, locale)
+			: `${formatGanttDate(model.startMs, locale)} – ${formatGanttDate(model.endMs, locale)}`
+	];
+	if (model.days != null) parts.push(formatGanttDuration(model.days, locale));
+	if (model.progress != null) parts.push(`${clamp(Math.round(model.progress), 0, 100)}%`);
+	if (model.predecessors.length) parts.push(`${labels.dependsOn} ${model.predecessors.join(', ')}`);
+	if (model.successors.length) parts.push(`${labels.followedBy} ${model.successors.join(', ')}`);
+
+	const head = `${model.label}: ${parts.join(' · ')}`;
+	// newlines are content in the popup, but a flat string has no room for them
+	return model.comment ? `${head}. ${model.comment.replace(/\s*\n\s*/g, ' ')}` : head;
+}
+
+export interface GanttTooltipMetrics {
+	/** popup width minus its horizontal padding */
+	innerWidth: number;
+	titleSize: number;
+	fontSize: number;
+	lineHeight: number;
+	/** vertical gap between two blocks */
+	blockGap: number;
+	/** vertical padding plus borders */
+	chrome: number;
+	/** height of the progress row, when there is one */
+	progressHeight: number;
+}
+
+/** Wrapped line count for one block of text at `fontSize`. */
+function wrappedLines(text: string, fontSize: number, innerWidth: number, bold = false): number {
+	if (!text || innerWidth <= 0) return 1;
+	// authored newlines are hard breaks; each resulting line then wraps on its own
+	return text
+		.split('\n')
+		.reduce(
+			(sum, line) =>
+				sum + Math.max(1, Math.ceil(estimateTextWidth(line, fontSize, { bold }) / innerWidth)),
+			0
+		);
+}
+
+/**
+ * How tall the popup will render, near enough.
+ *
+ * Only ever used to pick which side of the bar it goes on, so an estimate is
+ * enough — and an estimate is all that is available, since the popup has to be
+ * placed in the same pass that creates it, and `estimateTextWidth` exists
+ * precisely because measuring is impossible under jsdom.
+ */
+export function estimateGanttTooltipHeight(
+	model: GanttTooltipModel,
+	metrics: GanttTooltipMetrics
+): number {
+	const { innerWidth, fontSize, lineHeight, blockGap, chrome } = metrics;
+	const blocks: number[] = [];
+
+	blocks.push(wrappedLines(model.label, metrics.titleSize, innerWidth, true) * lineHeight);
+
+	const dates = model.milestone ? 'MMM 00, 0000' : 'MMM 00, 0000 – MMM 00, 0000 · 000 days';
+	blocks.push(wrappedLines(dates, fontSize, innerWidth) * lineHeight);
+
+	if (model.progress != null) blocks.push(metrics.progressHeight);
+	if (model.predecessors.length) {
+		blocks.push(wrappedLines(model.predecessors.join(', '), fontSize, innerWidth) * lineHeight);
+	}
+	if (model.successors.length) {
+		blocks.push(wrappedLines(model.successors.join(', '), fontSize, innerWidth) * lineHeight);
+	}
+	if (model.comment) blocks.push(wrappedLines(model.comment, fontSize, innerWidth) * lineHeight);
+
+	const total = blocks.reduce((a, b) => a + b, 0) + blockGap * Math.max(blocks.length - 1, 0);
+	return Math.round((total + chrome) * 100) / 100;
 }

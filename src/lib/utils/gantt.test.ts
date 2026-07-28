@@ -19,9 +19,23 @@ import {
 	resolveGanttArrows,
 	resolveGanttLabel,
 	rollUpGanttGroup,
-	toUTCms
+	toUTCms,
+	buildGanttTooltipModel,
+	estimateGanttTooltipHeight,
+	formatGanttDuration,
+	ganttDurationDays,
+	ganttTooltipLabels,
+	ganttTooltipText,
+	placeGanttTooltip,
+	GANTT_TOOLTIP_GAP
 } from './gantt';
-import type { GanttItem, GanttLayoutOptions, GanttRow } from './gantt';
+import type {
+	GanttBarSpec,
+	GanttItem,
+	GanttLayoutOptions,
+	GanttRow,
+	GanttTooltipMetrics
+} from './gantt';
 
 const DAY_MS = 86_400_000;
 
@@ -982,5 +996,271 @@ describe('resolveGanttArrows', () => {
 		]);
 		const arrows = resolveGanttArrows([{ fromTask: 0, toTask: 1, depKey: 'a' }], anchors, geom);
 		expect(arrows[0].x1).toBe(day(5) / DAY_MS + GANTT_MILESTONE_HALF);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Detail popup
+// ---------------------------------------------------------------------------
+
+describe('placeGanttTooltip', () => {
+	const size = { width: 260, height: 90 };
+	// a row well down a tall canvas, so neither side is forced
+	const anchor = { x: 400, top: 200, bottom: 236 };
+	const bounds = { width: 800, height: 500 };
+
+	it('centres the popup on the anchor when there is room either side', () => {
+		const place = placeGanttTooltip(anchor, size, bounds);
+		expect(place.left).toBe(400 - 130);
+		expect(place.arrowOffset).toBe(130);
+	});
+
+	it('prefers above, anchoring its bottom edge to the canvas bottom', () => {
+		const place = placeGanttTooltip(anchor, size, bounds);
+		expect(place.placement).toBe('above');
+		expect(place.top).toBeNull();
+		expect(place.bottom).toBe(500 - 200 + GANTT_TOOLTIP_GAP);
+	});
+
+	it('flips below when the bar is in the top row', () => {
+		const place = placeGanttTooltip({ x: 400, top: 0, bottom: 36 }, size, {
+			...bounds,
+			headroom: 26
+		});
+		expect(place.placement).toBe('below');
+		expect(place.bottom).toBeNull();
+		expect(place.top).toBe(36 + GANTT_TOOLTIP_GAP);
+	});
+
+	it('stays above for the last row, which has no room below either', () => {
+		const place = placeGanttTooltip({ x: 400, top: 464, bottom: 500 }, size, bounds);
+		expect(place.placement).toBe('above');
+	});
+
+	it('clamps to the left edge and slides the caret to follow the bar', () => {
+		const place = placeGanttTooltip({ ...anchor, x: 40 }, size, bounds);
+		expect(place.left).toBe(0);
+		expect(place.arrowOffset).toBe(40);
+	});
+
+	it('clamps to the right edge', () => {
+		const place = placeGanttTooltip({ ...anchor, x: 770 }, size, bounds);
+		expect(place.left).toBe(800 - 260);
+		expect(place.arrowOffset).toBe(770 - 540);
+	});
+
+	it('keeps the caret clear of both corners', () => {
+		expect(placeGanttTooltip({ ...anchor, x: 0 }, size, bounds).arrowOffset).toBe(14);
+		expect(placeGanttTooltip({ ...anchor, x: 800 }, size, bounds).arrowOffset).toBe(260 - 14);
+	});
+
+	it('pins to the left edge when the plot is narrower than the popup', () => {
+		const place = placeGanttTooltip({ ...anchor, x: 60 }, size, { ...bounds, width: 120 });
+		expect(place.left).toBe(0);
+	});
+
+	it('rounds its offsets to two decimals', () => {
+		const place = placeGanttTooltip({ ...anchor, x: 400.3333 }, size, bounds);
+		expect(place.left).toBe(270.33);
+	});
+});
+
+describe('ganttDurationDays', () => {
+	const jan = (n: number) => Date.UTC(2026, 0, n);
+
+	it('counts a same-day task as one day', () => {
+		expect(ganttDurationDays(jan(5), jan(5))).toBe(1);
+	});
+
+	it('counts both end dates', () => {
+		expect(ganttDurationDays(jan(5), jan(23))).toBe(19);
+	});
+
+	it('never goes below one, even for an inverted range', () => {
+		expect(ganttDurationDays(jan(23), jan(5))).toBe(1);
+	});
+});
+
+describe('formatGanttDuration', () => {
+	it('pluralizes in English', () => {
+		expect(formatGanttDuration(1, 'en')).toBe('1 day');
+		expect(formatGanttDuration(19, 'en')).toBe('19 days');
+	});
+
+	it('defers to ICU for Czech, which splits 1 / 2-4 / 5+', () => {
+		const five = formatGanttDuration(5, 'cs');
+		expect(five).toContain('5');
+		expect(five).not.toBe('5 days');
+		expect(formatGanttDuration(2, 'cs')).not.toBe(five.replace('5', '2'));
+	});
+});
+
+describe('ganttTooltipLabels', () => {
+	it('translates for any Czech locale', () => {
+		expect(ganttTooltipLabels('cs').dependsOn).toBe('Navazuje na');
+		expect(ganttTooltipLabels('cs-CZ').followedBy).toBe('Předchází');
+	});
+
+	it('falls back to English for everything else', () => {
+		expect(ganttTooltipLabels('de-DE').dependsOn).toBe('Depends on');
+		expect(ganttTooltipLabels().followedBy).toBe('Followed by');
+	});
+});
+
+describe('buildGanttTooltipModel', () => {
+	const jan = (n: number) => Date.UTC(2026, 0, n);
+	const tasks: GanttTask[] = [
+		{ label: 'Design', start: '2026-01-01', end: '2026-01-10' },
+		{ label: 'Build', start: '2026-01-11', end: '2026-01-20', comment: 'Blocked on\nthe SDK' },
+		{ label: 'Ship', start: '2026-01-21' }
+	];
+	const edges = [
+		{ fromTask: 0, toTask: 1, depKey: 'Design' },
+		{ fromTask: 1, toTask: 2, depKey: 'Build' }
+	];
+	const bar = (over: Partial<GanttBarSpec> = {}): GanttBarSpec => ({
+		key: 't:1',
+		label: 'Build',
+		startMs: jan(11),
+		endMs: jan(20),
+		milestone: false,
+		taskIndex: 1,
+		covers: [1],
+		summary: false,
+		...over
+	});
+
+	it('lists both dependency directions', () => {
+		const model = buildGanttTooltipModel(bar(), tasks, edges);
+		expect(model.predecessors).toEqual(['Design']);
+		expect(model.successors).toEqual(['Ship']);
+	});
+
+	it('picks the comment off the task behind the bar', () => {
+		expect(buildGanttTooltipModel(bar(), tasks, edges).comment).toBe('Blocked on\nthe SDK');
+	});
+
+	it('gives a milestone a date but no duration', () => {
+		const model = buildGanttTooltipModel(
+			bar({ key: 't:2', label: 'Ship', taskIndex: 2, covers: [2], milestone: true, endMs: jan(21) }),
+			tasks,
+			edges
+		);
+		expect(model.days).toBeUndefined();
+	});
+
+	it('counts both end dates for a bar', () => {
+		expect(buildGanttTooltipModel(bar(), tasks, edges).days).toBe(10);
+	});
+
+	it('drops a roll-up bar edges internal to its group, keeping the crossing ones', () => {
+		const model = buildGanttTooltipModel(
+			bar({ key: 'g:X:roll', label: 'Phase 1', taskIndex: -1, covers: [0, 1], summary: true }),
+			tasks,
+			edges
+		);
+		expect(model.predecessors).toEqual([]);
+		expect(model.successors).toEqual(['Ship']);
+	});
+
+	it('leaves a roll-up bar without a comment: no single task wrote one', () => {
+		const model = buildGanttTooltipModel(
+			bar({ taskIndex: -1, covers: [0, 1], summary: true }),
+			tasks,
+			edges
+		);
+		expect(model.comment).toBeUndefined();
+	});
+
+	it('names each dependency once, however many edges reach it', () => {
+		const model = buildGanttTooltipModel(bar(), tasks, [
+			...edges,
+			{ fromTask: 0, toTask: 1, depKey: 'd0' }
+		]);
+		expect(model.predecessors).toEqual(['Design']);
+	});
+});
+
+describe('ganttTooltipText', () => {
+	const labels = ganttTooltipLabels('en');
+	const model = {
+		label: 'Build',
+		startMs: Date.UTC(2026, 0, 11),
+		endMs: Date.UTC(2026, 0, 20),
+		milestone: false,
+		days: 10,
+		progress: 40,
+		predecessors: ['Design'],
+		successors: ['Ship'],
+		comment: 'Blocked on\nthe SDK',
+		summary: false
+	};
+
+	it('carries everything the popup shows on one line', () => {
+		const text = ganttTooltipText(model, { locale: 'en', labels });
+		expect(text).toContain('Build');
+		expect(text).toContain(formatGanttDate(model.startMs, 'en'));
+		expect(text).toContain(formatGanttDate(model.endMs, 'en'));
+		expect(text).toContain('10 days');
+		expect(text).toContain('40%');
+		expect(text).toContain('Depends on Design');
+		expect(text).toContain('Followed by Ship');
+	});
+
+	it('flattens the comment: a title has no room for newlines', () => {
+		const text = ganttTooltipText(model, { locale: 'en', labels });
+		expect(text).toContain('Blocked on the SDK');
+		expect(text).not.toContain('\n');
+	});
+
+	it('gives a milestone a single date', () => {
+		const text = ganttTooltipText(
+			{ ...model, milestone: true, days: undefined, endMs: model.startMs },
+			{ locale: 'en', labels }
+		);
+		expect(text).not.toContain('–');
+	});
+});
+
+describe('estimateGanttTooltipHeight', () => {
+	const metrics: GanttTooltipMetrics = {
+		innerWidth: 240,
+		titleSize: 13,
+		fontSize: 12,
+		lineHeight: 17,
+		blockGap: 6,
+		chrome: 18,
+		progressHeight: 14
+	};
+	const base = {
+		label: 'Build',
+		startMs: Date.UTC(2026, 0, 11),
+		endMs: Date.UTC(2026, 0, 20),
+		milestone: false,
+		days: 10,
+		predecessors: [],
+		successors: [],
+		summary: false
+	};
+
+	it('grows with a longer comment', () => {
+		const short = estimateGanttTooltipHeight({ ...base, comment: 'ok' }, metrics);
+		const long = estimateGanttTooltipHeight(
+			{ ...base, comment: 'ok '.repeat(80) },
+			metrics
+		);
+		expect(long).toBeGreaterThan(short);
+	});
+
+	it('charges a line for each authored newline', () => {
+		const one = estimateGanttTooltipHeight({ ...base, comment: 'a' }, metrics);
+		const two = estimateGanttTooltipHeight({ ...base, comment: 'a\nb' }, metrics);
+		expect(two - one).toBe(metrics.lineHeight);
+	});
+
+	it('charges a row for the progress bar', () => {
+		const without = estimateGanttTooltipHeight(base, metrics);
+		const with_ = estimateGanttTooltipHeight({ ...base, progress: 40 }, metrics);
+		expect(with_ - without).toBe(metrics.progressHeight + metrics.blockGap);
 	});
 });

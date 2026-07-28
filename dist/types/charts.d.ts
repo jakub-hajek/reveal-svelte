@@ -28,12 +28,18 @@ export interface GanttTask {
     color?: string;
     /** Force milestone rendering even when `end` is set */
     milestone?: boolean;
+    /**
+     * Free-form note shown in the bar's detail popup. Plain text: newlines are
+     * preserved, markup is not interpreted. Keep it to a few lines — a long one
+     * scrolls, which is no use on a projector.
+     */
+    comment?: string;
 }
 export interface GanttChartProps {
     tasks: GanttTask[];
     /** true = current date, or an explicit date; draws a dashed marker line */
     today?: boolean | string | Date;
-    /** Locale for axis labels and tooltips (defaults to the browser locale) */
+    /** Locale for axis labels and popup dates (defaults to the browser locale) */
     locale?: string;
     /** Legend label for tasks without a section (defaults per locale: cs → 'Ostatní', otherwise 'Other') */
     otherLabel?: string;
@@ -48,6 +54,18 @@ export interface GanttChartProps {
     collapsed?: boolean | string[];
     /** Forces the legend on or off; by default it shows only when `groups` is off */
     legend?: boolean;
+    /** Draws a rolled-up bar on an *expanded* group's header row */
+    summaryBar?: boolean;
+    /**
+     * Set false to drop the detail popup — bars go back to plain, non-focusable
+     * divs with a native `title`, for decks that don't want one tab stop per task
+     */
+    tooltip?: boolean;
+    /**
+     * Width (px) of the detail popup. A prop rather than a CSS custom property
+     * because the placement math has to know it before the popup renders.
+     */
+    tooltipWidth?: number;
     width?: number;
     rowHeight?: number;
     /** Height of one packed sub-lane inside a collapsed group row */
@@ -55,4 +73,5 @@ export interface GanttChartProps {
     /** Font size (px) of the labels drawn on or beside bars in a collapsed group */
     barLabelSize?: number;
     labelWidth?: number;
+    class?: string;
 }
