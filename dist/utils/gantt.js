@@ -500,6 +500,25 @@ function extentOf(bar, geometry, label, plotWidth) {
     return ganttBarExtent({ ...geometry, plotWidth, milestone: bar.milestone }, label);
 }
 /**
+ * The span the lane packer has to keep clear — the drawn footprint, except that a
+ * milestone packs from its own date rather than from its left vertex.
+ *
+ * The diamond is centred on the day, so half of it always hangs back over
+ * whatever ended there; a gate landing on the last day of the phase it closes is
+ * the normal case, not a collision. Sharing the lane costs the few pixels of bar
+ * the diamond covers — which is how a milestone is drawn everywhere else — while
+ * refusing costs a whole lane, and the row is as tall as its lane count.
+ *
+ * Labels are still bounded by the true footprint, so no text is written under the
+ * diamond.
+ */
+function packingFootprint(bar, geometry, o) {
+    const drawn = extentOf(bar, geometry, NO_LABEL, o.plotWidth);
+    if (!bar.milestone)
+        return drawn;
+    return { startPx: clamp(geometry.barX, 0, o.plotWidth), endPx: drawn.endPx };
+}
+/**
  * Places every bar's label, one lane at a time and left to right along it.
  *
  * Bars on other lanes are drawn above or below, never beside, so only the two
@@ -625,8 +644,8 @@ export function layoutGanttRows(tree, o) {
             // tasks running back to back — touching, never overlapping — were split
             // apart by the footprint of a label that would have truncated happily.
             const geometry = bars.map((bar) => barGeometry(bar, o));
-            const footprints = bars.map((bar, i) => ganttBarExtent({ ...geometry[i], plotWidth: o.plotWidth, milestone: bar.milestone }, NO_LABEL));
-            const { lanes, laneCount: packedLanes } = packGanttLanes(footprints);
+            const footprints = bars.map((bar, i) => extentOf(bar, geometry[i], NO_LABEL, o.plotWidth));
+            const { lanes, laneCount: packedLanes } = packGanttLanes(bars.map((bar, i) => packingFootprint(bar, geometry[i], o)));
             let laneCount = packedLanes;
             // labels second, each fitted to the room its own lane leaves it
             let labels = placeLaneLabels(bars, geometry, footprints, lanes, o);

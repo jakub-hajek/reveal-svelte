@@ -759,6 +759,31 @@ describe('layoutGanttRows', () => {
 		).toBe(true);
 	});
 
+	// half the diamond hangs back over the bar by definition, and a gate closing a
+	// phase is the normal case — not worth a lane, and the row is as tall as it has
+	// lanes
+	it('lets a milestone share the lane of the bar it closes', () => {
+		const closing = [
+			mkItem(0, 'Analysis', 1, 4, 'Ship'),
+			mkItem(1, 'Delivery', 4, 9, 'Ship'),
+			mkItem(2, 'Go-live', 9, 9, 'Ship', { milestone: true })
+		];
+		const { rows } = layoutGanttRows(buildGanttTree(closing, true), layoutOpts(['Ship']));
+		expect(rows[0].laneCount).toBe(1);
+		expect(rows[0].lanes.map((lane) => lane.lane)).toEqual([0, 0, 0]);
+		expect(rows[0].lanes.every((lane) => lane.label.placement !== 'none')).toBe(true);
+	});
+
+	// only the leading half is forgiven: a milestone inside a bar still overlaps it
+	it('still spends a lane on a milestone that lands mid-bar', () => {
+		const overlapping = [
+			mkItem(0, 'Delivery', 1, 9, 'Ship'),
+			mkItem(1, 'Checkpoint', 5, 5, 'Ship', { milestone: true })
+		];
+		const { rows } = layoutGanttRows(buildGanttTree(overlapping, true), layoutOpts(['Ship']));
+		expect(rows[0].laneCount).toBe(2);
+	});
+
 	it('splits adjacent children too narrow to paint side by side', () => {
 		const adjacent = [mkItem(0, 'A', 1, 2, 'Build'), mkItem(1, 'B', 2, 3, 'Build')];
 		// 1px per day: two 1px bars 1px apart, which `.gantt-bar`'s 4px minimum
