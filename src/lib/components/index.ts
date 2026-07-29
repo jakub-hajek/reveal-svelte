@@ -19,3 +19,4 @@ export { default as Code } from './content/Code.svelte';
 export { default as Excalidraw } from './content/Excalidraw.svelte';
 
 export { default as LogoOverlay } from './LogoOverlay.svelte';
+export { default as ThemeToggle } from './ThemeToggle.svelte';

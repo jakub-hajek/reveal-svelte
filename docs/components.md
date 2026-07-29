@@ -18,7 +18,7 @@ three layouts) renders a reveal.js `<section>` and shares these two props:
 | `transition` | `'slide' \| 'fade' \| 'convex' \| 'concave' \| 'zoom'` | `undefined` | Per-slide transition override |
 
 - [Deck](#deck): [RevealWrapper](#revealwrapper)
-- [Slides](#slides): [BaseSlide](#baseslide), [TitleSlide](#titleslide), [MarkdownSlide](#markdownslide), [SlideFooter](#slidefooter), [LogoOverlay](#logooverlay)
+- [Slides](#slides): [BaseSlide](#baseslide), [TitleSlide](#titleslide), [MarkdownSlide](#markdownslide), [SlideFooter](#slidefooter), [LogoOverlay](#logooverlay), [ThemeToggle](#themetoggle)
 - [Layouts](#layouts): [TwoColumnLayout](#twocolumnlayout), [FullImageLayout](#fullimagelayout), [GridLayout](#gridlayout)
 - [Charts](#charts): [BarChart / LineChart / PieChart](#barchart--linechart--piechart), [GanttChart](#ganttchart)
 - [Content](#content): [Table](#table), [Code](#code), [Math](#math), [Markdown](#markdown), [Excalidraw](#excalidraw)
@@ -53,6 +53,7 @@ extra fields:
 - `footer?: { presentationName: string; authorName: string }` — renders a
   [`SlideFooter`](#slidefooter) below the deck (hidden in `?print-pdf` mode)
 - `logo?: LogoConfig` — renders a [`LogoOverlay`](#logooverlay)
+- `themeToggle?: ThemeToggleConfig` — renders a [`ThemeToggle`](#themetoggle)
 
 Library defaults (`config` from `reveal-svelte` exposes them): `width: 960`,
 `height: 700`, `margin: 0.04`, `transition: 'slide'`, `controls`, `progress`,
@@ -151,6 +152,31 @@ Fixed-position logo image. Rendered automatically from `config.logo`.
 | `height` | `string` | `'auto'` | CSS height |
 | `inset` | `string` | `'20px'` | Distance from both edges of its corner |
 | `opacity` | `number` | `1` | Image opacity |
+
+### ThemeToggle
+
+Fixed-position button that switches the deck between Catppuccin Mocha (dark)
+and Catppuccin Latte (light) by setting `data-theme` on `<html>`. Rendered
+automatically from `config.themeToggle`; the choice persists in
+`localStorage` (`reveal-svelte-theme`) across reloads. See
+[theming.md](./theming.md#dark--light-mode) for the CSS side and a note on
+avoiding a flash of the wrong theme on load.
+
+```svelte
+<RevealWrapper config={{ themeToggle: {} }}>
+```
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `config` | `ThemeToggleConfig` | `{}` | Toggle configuration |
+
+`ThemeToggleConfig`:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `default` | `'dark' \| 'light'` | OS preference, else `'dark'` | Theme used when no choice is stored yet |
+| `position` | `'bottom-right' \| 'bottom-left' \| 'top-right' \| 'top-left'` | `'bottom-right'` | Corner |
+| `inset` | `string` | `'20px'` | Distance from both edges of its corner |
 
 ---
 

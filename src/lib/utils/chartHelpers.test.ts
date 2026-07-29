@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { getThemeColor, getThemeChartColors } from './chartHelpers';
+import { getThemeColor, getThemeChartColors, onThemeChange } from './chartHelpers';
 
 describe('chartHelpers', () => {
 	beforeAll(() => {
@@ -48,5 +48,39 @@ describe('chartHelpers', () => {
 		expect(colors).toHaveLength(12);
 		expect(colors[0]).toBe('#f38ba8');
 		expect(colors[11]).toBe('#b4befe');
+	});
+
+	it('onThemeChange fires when data-theme changes on the root element', async () => {
+		const onUpdate = vi.fn();
+		const stop = onThemeChange(onUpdate);
+
+		document.documentElement.dataset.theme = 'light';
+		// MutationObserver callbacks are queued as microtasks.
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(onUpdate).toHaveBeenCalledTimes(1);
+
+		stop();
+		document.documentElement.dataset.theme = 'dark';
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(onUpdate).toHaveBeenCalledTimes(1);
+		document.documentElement.removeAttribute('data-theme');
+	});
+
+	it('onThemeChange ignores unrelated attribute changes', async () => {
+		const onUpdate = vi.fn();
+		const stop = onThemeChange(onUpdate);
+
+		document.documentElement.setAttribute('class', 'print-pdf');
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(onUpdate).not.toHaveBeenCalled();
+
+		stop();
+		document.documentElement.removeAttribute('class');
 	});
 });

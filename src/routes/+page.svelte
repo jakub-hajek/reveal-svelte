@@ -19,7 +19,8 @@
 		footer: {
 			presentationName: 'Svelte Reveal.js Starter Kit',
 			authorName: 'Kuba Zamek'
-		}
+		},
+		themeToggle: {}
 	};
 </script>
 

@@ -10,7 +10,7 @@
 		Tooltip,
 		Legend
 	} from 'chart.js';
-	import { getThemeChartColors, getThemeColor } from '../../utils/chartHelpers';
+	import { getThemeChartColors, getThemeColor, onThemeChange } from '../../utils/chartHelpers';
 	import type { ChartData, ChartOptions } from '../../types/charts';
 
 	Chart.register(BarController, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend);
@@ -91,6 +91,14 @@
 		return processed;
 	});
 
+	function syncChart() {
+		if (!chartInstance) return;
+		chartColors = getThemeChartColors();
+		chartInstance.data = processedData();
+		chartInstance.options = { ...buildDefaultOptions(), ...options };
+		chartInstance.update();
+	}
+
 	onMount(() => {
 		chartColors = getThemeChartColors();
 		if (canvasElement) {
@@ -101,7 +109,10 @@
 			});
 		}
 
+		const stopWatchingTheme = onThemeChange(syncChart);
+
 		return () => {
+			stopWatchingTheme();
 			if (chartInstance) {
 				chartInstance.destroy();
 			}

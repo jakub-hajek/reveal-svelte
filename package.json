@@ -1,6 +1,6 @@
 {
 	"name": "reveal-svelte",
-	"version": "0.7.0",
+	"version": "0.8.0",
 	"description": "Reveal.js presentation components for Svelte 5 — slides, layouts, charts, markdown, math, code and Excalidraw diagrams.",
 	"license": "MIT",
 	"type": "module",
@@ -18,7 +18,8 @@
 		"./theme/variables.css": "./dist/theme/variables.css",
 		"./theme/reveal.css": "./dist/theme/reveal.css",
 		"./theme/base.css": "./dist/theme/base.css",
-		"./theme/catppuccin/theme.css": "./dist/theme/catppuccin/theme.css"
+		"./theme/catppuccin/theme.css": "./dist/theme/catppuccin/theme.css",
+		"./theme/catppuccin-latte/theme.css": "./dist/theme/catppuccin-latte/theme.css"
 	},
 	"files": [
 		"dist",

@@ -13,9 +13,49 @@ import 'reveal-svelte/theme/reveal.css'; // typography + slide styling built on 
 `reveal-svelte/theme/variables.css` is an alias that re-exports the Catppuccin
 theme; older decks importing it keep working.
 
-Catppuccin Mocha is the only theme shipped today. A custom theme is a stylesheet
-that imports `reveal-svelte/theme/base.css` and sets the tokens below — swap it
-in for the theme import above.
+Two Catppuccin flavors ship: **Mocha** (dark, the default — shown above) and
+**Latte** (light). Swap the theme import for `catppuccin-latte/theme.css` to
+default a deck to light instead:
+
+```ts
+import 'reveal-svelte/theme/catppuccin-latte/theme.css'; // Catppuccin Latte, light by default
+```
+
+A custom theme is a stylesheet that imports `reveal-svelte/theme/base.css` and
+sets the tokens below — swap it in for the theme import above.
+
+## Dark / light mode
+
+Both theme files carry *both* flavors, gated by a `data-theme` attribute on
+`<html>` — `catppuccin/theme.css` defaults to Mocha with a `[data-theme="light"]`
+override, `catppuccin-latte/theme.css` is the reverse. Whichever one you import,
+add `themeToggle` to `RevealConfig` to render a corner button that flips the
+attribute and remembers the choice in `localStorage`:
+
+```svelte
+<RevealWrapper config={{ themeToggle: { position: 'bottom-left' } }}>
+```
+
+See [ThemeToggle](./components.md#themetoggle) for the full config.
+
+`Code`'s syntax highlighting (`svelte-highlight`'s `atom-one-dark.css`) is not
+theme-aware and stays dark in both modes — only the block's chrome (filename
+header, copy button, line numbers) follows `--theme-*`.
+
+Because the toggle reads the stored/system preference in the browser after the
+page has already painted, a deck with a strong preference for zero flash-of-
+wrong-theme can set `data-theme` on `<html>` before hydration with a small
+blocking script in `app.html`:
+
+```html
+<script>
+	(function () {
+		var stored = localStorage.getItem('reveal-svelte-theme');
+		var theme = stored || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+		document.documentElement.dataset.theme = theme;
+	})();
+</script>
+```
 
 ## Tokens
 
@@ -23,20 +63,20 @@ Components and `reveal.css` only ever read `--theme-*`; `base.css` maps those to
 the reveal.js `--r-*` variables and to the legacy `--ctp-*` / `--catppuccin-*`
 names, so overriding one token updates everything downstream.
 
-| Token | Catppuccin Mocha | Used for |
-|-------|------------------|----------|
-| `--theme-bg` | `#1e1e2e` | Deck background |
-| `--theme-surface-0` / `-1` / `-2` | `#313244` / `#45475a` / `#585b70` | Cards, table rows, borders |
-| `--theme-text` | `#cdd6f4` | Body text |
-| `--theme-heading` | `#b4befe` | Headings |
-| `--theme-muted` | `#a6adc8` | Footer, captions |
-| `--theme-subtext` | `#bac2de` | Secondary text |
-| `--theme-primary` | `#fab387` | Accent, selection |
-| `--theme-secondary` | `#cba6f7` | Titles, secondary accent |
-| `--theme-border` | `#6c7086` | Borders |
-| `--theme-link` / `--theme-link-hover` | `#89b4fa` / `#74c7ec` | Links |
-| `--theme-code-*` (`bg`, `text`, `keyword`, `string`, `number`, `comment`, `function`) | — | Code blocks |
-| `--theme-chart-1` … `--theme-chart-12` | `#f38ba8`, `#89b4fa`, `#a6e3a1`, … | Chart series, Gantt sections |
+| Token | Catppuccin Mocha (dark) | Catppuccin Latte (light) | Used for |
+|-------|--------------------------|---------------------------|----------|
+| `--theme-bg` | `#1e1e2e` | `#eff1f5` | Deck background |
+| `--theme-surface-0` / `-1` / `-2` | `#313244` / `#45475a` / `#585b70` | `#ccd0da` / `#bcc0cc` / `#acb0be` | Cards, table rows, borders |
+| `--theme-text` | `#cdd6f4` | `#4c4f69` | Body text |
+| `--theme-heading` | `#b4befe` | `#7287fd` | Headings |
+| `--theme-muted` | `#a6adc8` | `#6c6f85` | Footer, captions |
+| `--theme-subtext` | `#bac2de` | `#5c5f77` | Secondary text |
+| `--theme-primary` | `#fab387` | `#fe640b` | Accent, selection |
+| `--theme-secondary` | `#cba6f7` | `#8839ef` | Titles, secondary accent |
+| `--theme-border` | `#6c7086` | `#9ca0b0` | Borders |
+| `--theme-link` / `--theme-link-hover` | `#89b4fa` / `#74c7ec` | `#1e66f5` / `#209fb5` | Links |
+| `--theme-code-*` (`bg`, `text`, `keyword`, `string`, `number`, `comment`, `function`) | — | — | Code blocks |
+| `--theme-chart-1` … `--theme-chart-12` | `#f38ba8`, `#89b4fa`, `#a6e3a1`, … | `#d20f39`, `#1e66f5`, `#40a02b`, … | Chart series, Gantt sections |
 | `--gantt-dependency-color` | falls back to `--theme-muted` | `GanttChart` dependency arrows |
 | `--gantt-today-color` | falls back to `--theme-muted` | The dashed `today` line |
 | `--gantt-marker-color` | falls back to `--theme-muted` | Default line and caption color for `markers` (a marker's own `color` wins) |

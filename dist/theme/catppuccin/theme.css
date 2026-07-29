@@ -1,6 +1,7 @@
 @import '../base.css';
 
-:root {
+:root,
+:root[data-theme='dark'] {
 	--theme-bg: #1e1e2e;
 	--theme-surface-0: #313244;
 	--theme-surface-1: #45475a;
@@ -38,4 +39,45 @@
 	--theme-chart-10: #89dceb;
 	--theme-chart-11: #eba0ac;
 	--theme-chart-12: #b4befe;
+}
+
+/* Catppuccin Latte — used when a ThemeToggle switches to 'light' */
+:root[data-theme='light'] {
+	--theme-bg: #eff1f5;
+	--theme-surface-0: #ccd0da;
+	--theme-surface-1: #bcc0cc;
+	--theme-surface-2: #acb0be;
+
+	--theme-text: #4c4f69;
+	--theme-heading: #7287fd;
+	--theme-muted: #6c6f85;
+	--theme-subtext: #5c5f77;
+
+	--theme-primary: #fe640b;
+	--theme-secondary: #8839ef;
+	--theme-border: #9ca0b0;
+
+	--theme-link: #1e66f5;
+	--theme-link-hover: #209fb5;
+
+	--theme-code-bg: #ccd0da;
+	--theme-code-text: #4c4f69;
+	--theme-code-keyword: #8839ef;
+	--theme-code-string: #40a02b;
+	--theme-code-number: #fe640b;
+	--theme-code-comment: #9ca0b0;
+	--theme-code-function: #1e66f5;
+
+	--theme-chart-1: #d20f39;
+	--theme-chart-2: #1e66f5;
+	--theme-chart-3: #40a02b;
+	--theme-chart-4: #fe640b;
+	--theme-chart-5: #8839ef;
+	--theme-chart-6: #209fb5;
+	--theme-chart-7: #df8e1d;
+	--theme-chart-8: #179299;
+	--theme-chart-9: #ea76cb;
+	--theme-chart-10: #04a5e5;
+	--theme-chart-11: #e64553;
+	--theme-chart-12: #7287fd;
 }

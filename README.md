@@ -62,7 +62,7 @@ Full props tables and examples: **[docs/components.md](docs/components.md)**.
 | Group | Components |
 |-------|------------|
 | Deck | `RevealWrapper` |
-| Slides | `BaseSlide`, `TitleSlide`, `MarkdownSlide`, `SlideFooter`, `LogoOverlay` |
+| Slides | `BaseSlide`, `TitleSlide`, `MarkdownSlide`, `SlideFooter`, `LogoOverlay`, `ThemeToggle` |
 | Layouts | `TwoColumnLayout`, `FullImageLayout`, `GridLayout` |
 | Charts | `BarChart`, `LineChart`, `PieChart`, `GanttChart` |
 | Content | `Markdown`, `Table`, `Math`, `Code`, `Excalidraw` |
@@ -70,8 +70,10 @@ Full props tables and examples: **[docs/components.md](docs/components.md)**.
 
 ## Theming
 
-Themes are plain CSS variables; Catppuccin Mocha ships by default. Token
-reference, custom themes, logo and footer: **[docs/theming.md](docs/theming.md)**.
+Themes are plain CSS variables; Catppuccin Mocha ships by default, with
+Catppuccin Latte available for a light mode and a `ThemeToggle` component to
+switch between them at runtime. Token reference, custom themes, logo and
+footer: **[docs/theming.md](docs/theming.md)**.
 
 ## Development
 

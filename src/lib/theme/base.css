@@ -87,4 +87,15 @@
 	--r-link-color-hover: var(--theme-link-hover);
 	--r-selection-background-color: var(--theme-primary);
 	--r-selection-color: var(--theme-bg);
+
+	/* Code component chrome (filename header, copy button, line numbers) */
+	--r-code-background: var(--theme-code-bg);
+	--r-surface0: var(--theme-surface-0);
+	--r-surface1: var(--theme-surface-1);
+	--r-surface2: var(--theme-surface-2);
+	--r-subtext0: var(--theme-muted);
+	--r-subtext1: var(--theme-subtext);
+	--r-text: var(--theme-text);
+	--r-base: var(--theme-bg);
+	--r-yellow: var(--theme-chart-7);
 }

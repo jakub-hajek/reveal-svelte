@@ -8,6 +8,7 @@
 
 	import SlideFooter from '../components/slides/SlideFooter.svelte';
 	import LogoOverlay from '../components/LogoOverlay.svelte';
+	import ThemeToggle from '../components/ThemeToggle.svelte';
 
 	export interface Props {
 		config?: RevealConfig;
@@ -23,6 +24,7 @@
 	}
 
 	const logoConfig = (() => config.logo)();
+	const themeToggleConfig = (() => config.themeToggle)();
 
 	let revealInstance: Reveal.Api | null = null;
 	let revealElement: HTMLDivElement;
@@ -97,6 +99,9 @@
 	{/if}
 	{#if logoConfig}
 		<LogoOverlay config={logoConfig} />
+	{/if}
+	{#if themeToggleConfig}
+		<ThemeToggle config={themeToggleConfig} />
 	{/if}
 </div>
 
