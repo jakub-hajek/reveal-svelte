@@ -250,8 +250,11 @@ Grid of items — each item's content is a snippet or a plain string.
 
 ### BarChart / LineChart / PieChart
 
-Chart.js charts that pick up the theme colors automatically. All three take the
-same props.
+Chart.js charts that pick up the theme colors automatically, including redrawing
+when a [`ThemeToggle`](#themetoggle) flips `data-theme` — Chart.js draws onto a
+`<canvas>`, so colors are baked in as pixels and re-read from `--theme-*` on
+every theme change rather than following CSS live. All three take the same
+props.
 
 ```svelte
 <script lang="ts">

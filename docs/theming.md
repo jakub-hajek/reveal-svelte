@@ -42,6 +42,11 @@ See [ThemeToggle](./components.md#themetoggle) for the full config.
 theme-aware and stays dark in both modes — only the block's chrome (filename
 header, copy button, line numbers) follows `--theme-*`.
 
+`BarChart`, `LineChart`, and `PieChart` draw onto a `<canvas>`, so their colors
+are baked in as pixels rather than following CSS live — they watch for the
+toggle's `data-theme` change and redraw with fresh `--theme-*` values.
+`GanttChart` and everything else is plain CSS/SVG, so it repaints on its own.
+
 Because the toggle reads the stored/system preference in the browser after the
 page has already painted, a deck with a strong preference for zero flash-of-
 wrong-theme can set `data-theme` on `<html>` before hydration with a small
@@ -77,6 +82,12 @@ names, so overriding one token updates everything downstream.
 | `--theme-link` / `--theme-link-hover` | `#89b4fa` / `#74c7ec` | `#1e66f5` / `#209fb5` | Links |
 | `--theme-code-*` (`bg`, `text`, `keyword`, `string`, `number`, `comment`, `function`) | — | — | Code blocks |
 | `--theme-chart-1` … `--theme-chart-12` | `#f38ba8`, `#89b4fa`, `#a6e3a1`, … | `#d20f39`, `#1e66f5`, `#40a02b`, … | Chart series, Gantt sections |
+
+`GanttChart` also reads these tokens, all flavor-agnostic (a fixed size, or a
+fallback onto one of the tokens above — so they already switch with the theme):
+
+| Token | Default | Used for |
+|-------|---------|----------|
 | `--gantt-dependency-color` | falls back to `--theme-muted` | `GanttChart` dependency arrows |
 | `--gantt-today-color` | falls back to `--theme-muted` | The dashed `today` line |
 | `--gantt-marker-color` | falls back to `--theme-muted` | Default line and caption color for `markers` (a marker's own `color` wins) |
