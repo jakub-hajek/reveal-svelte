@@ -1,4 +1,4 @@
-import type { GanttTask } from '../types/charts';
+import type { GanttSubtask, GanttTask } from '../types/charts';
 
 const DAY_MS = 86_400_000;
 const MAX_LABELED_TICKS = 14;
@@ -325,6 +325,33 @@ export function ganttBarExtent(
 		startPx: clamp(start, 0, input.plotWidth),
 		endPx: clamp(end, 0, input.plotWidth)
 	};
+}
+
+export interface GanttSubtaskSegment {
+	description: string;
+	/** 0–1 fraction of the bar's own width */
+	startFraction: number;
+	endFraction: number;
+}
+
+/**
+ * Splits a task's bar into segments proportional to each subtask's `duration`.
+ * `duration` is a unitless weight, not a time span — only its share of the sum
+ * matters. An empty or non-positive total falls back to no segments, so the
+ * caller draws the bar plain instead of dividing by zero.
+ */
+export function ganttSubtaskSegments(
+	subtasks: readonly GanttSubtask[]
+): GanttSubtaskSegment[] {
+	const total = subtasks.reduce((sum, s) => sum + Math.max(s.duration, 0), 0);
+	if (total <= 0) return [];
+	let cursor = 0;
+	return subtasks.map((s) => {
+		const width = Math.max(s.duration, 0) / total;
+		const seg = { description: s.description, startFraction: cursor, endFraction: cursor + width };
+		cursor += width;
+		return seg;
+	});
 }
 
 export interface GanttPackable {

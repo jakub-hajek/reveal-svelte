@@ -37,6 +37,18 @@ export interface GanttTask {
 	 * scrolls, which is no use on a projector.
 	 */
 	comment?: string;
+	/**
+	 * Splits the bar into labeled segments sized by relative `duration`. Shown
+	 * whenever the task is drawn on its own row; hidden (plain bar) when it's
+	 * rolled into a collapsed group.
+	 */
+	subtasks?: GanttSubtask[];
+}
+
+export interface GanttSubtask {
+	description: string;
+	/** Unitless weight — only used for the segment's share of the bar's width */
+	duration: number;
 }
 
 /** A vertical line across the whole plot, for a date landmark the rows share */

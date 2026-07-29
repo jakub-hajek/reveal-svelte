@@ -425,6 +425,79 @@ describe('GanttChart groups', () => {
         expect(pctOf(bar, 'left') + pctOf(bar, 'width')).toBeLessThan(pctOf(gate, 'left'));
     });
 });
+describe('GanttChart subtasks', () => {
+    const withSubtasks = [
+        {
+            label: 'Build',
+            start: '2026-02-02',
+            end: '2026-03-20',
+            subtasks: [
+                { description: 'Backend', duration: 1 },
+                { description: 'Frontend', duration: 3 }
+            ]
+        }
+    ];
+    it('splits a plain task bar into one segment per subtask', () => {
+        const { container, getByText } = render(GanttChart, { props: { tasks: withSubtasks } });
+        expect(container.querySelectorAll('.gantt-subtask').length).toBe(2);
+        expect(getByText('Backend')).toBeInTheDocument();
+        expect(getByText('Frontend')).toBeInTheDocument();
+    });
+    it('sizes segments proportionally to duration', () => {
+        const { container } = render(GanttChart, { props: { tasks: withSubtasks } });
+        const widths = [...container.querySelectorAll('.gantt-subtask')].map((el) => el.style.width);
+        expect(widths).toEqual(['25%', '75%']);
+    });
+    it('skips the progress fill in favour of segments when both are set', () => {
+        const { container } = render(GanttChart, {
+            props: {
+                tasks: [{ ...withSubtasks[0], progress: 50 }]
+            }
+        });
+        expect(container.querySelectorAll('.gantt-subtask').length).toBe(2);
+        expect(container.querySelector('.gantt-progress')).toBeNull();
+    });
+    it('falls back to a plain bar when durations are all zero', () => {
+        const { container } = render(GanttChart, {
+            props: {
+                tasks: [
+                    {
+                        label: 'Idle',
+                        start: '2026-01-05',
+                        end: '2026-01-30',
+                        subtasks: [{ description: 'A', duration: 0 }]
+                    }
+                ]
+            }
+        });
+        expect(container.querySelector('.gantt-subtask')).toBeNull();
+        expect(container.querySelector('.gantt-bar')).not.toBeNull();
+    });
+    it('hides subtasks for a task rolled into a collapsed group, and shows them once expanded', () => {
+        const grouped = [
+            {
+                label: 'Build',
+                start: '2026-02-02',
+                end: '2026-03-20',
+                section: 'Phase',
+                subtasks: [
+                    { description: 'Backend', duration: 1 },
+                    { description: 'Frontend', duration: 3 }
+                ]
+            }
+        ];
+        const collapsed = render(GanttChart, {
+            props: { tasks: grouped, groups: true, collapsed: true }
+        });
+        expect(collapsed.container.querySelector('.gantt-subtask')).toBeNull();
+        expect(collapsed.container.querySelector('.gantt-bar')).not.toBeNull();
+        collapsed.unmount();
+        const expanded = render(GanttChart, {
+            props: { tasks: grouped, groups: true, collapsed: false }
+        });
+        expect(expanded.container.querySelectorAll('.gantt-subtask').length).toBe(2);
+    });
+});
 // jsdom has no layout, so nothing here may depend on a measured size — the
 // popup's placement is driven entirely by the layout's own px geometry, and
 // `plotWidth` falls back to the deterministic width - labelWidth (720).

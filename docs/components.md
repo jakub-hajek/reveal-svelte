@@ -341,6 +341,7 @@ diamond. With `groups`, sections become collapsible rows.
 | `color` | `string` | Overrides the section color for this row |
 | `milestone` | `boolean` | Forces a diamond even when `end` is set |
 | `comment` | `string` | Free-form note shown in the bar's detail popup; newlines are preserved |
+| `subtasks` | `GanttSubtask[]` | Splits the bar into labeled segments sized by relative `duration`; hidden when the task is rolled into a collapsed group |
 
 **Vertical markers.** `today` draws one dashed line; `markers` draws as many as
 you like, each with a caption in the axis strip above it, its own color and its
@@ -474,6 +475,41 @@ label placed beside that bar sits. A long label on a bar that also has an
 outgoing dependency will collect a line through it. Keep labels short in charts
 that combine `groups` with `dependsOn`, or hide the arrows with
 `dependencies={false}` where the timing, not the hand-off, is the point.
+
+**Subtasks.** A task's `subtasks` array splits its bar into consecutive labeled
+segments — its own breakdown, drawn inside the one row that task already
+occupies. `duration` is a unitless weight, not a real time span: only its share
+of the array's total decides a segment's width, so `[{ duration: 1 }, { duration: 3 }]`
+splits the bar 25% / 75% regardless of what unit you had in mind. Segments show
+whenever the task is drawn on its own row — top-level, or a child of an
+*expanded* group — and disappear (the task falls back to its normal plain bar)
+once it's rolled into a *collapsed* group's packed bar, where there isn't room
+for a breakdown anyway. They're purely visual: hovering or clicking the bar
+still opens the one detail popup for the whole task, not per-segment ones.
+
+```svelte
+<GanttChart
+	tasks={[
+		{
+			label: 'Backend',
+			start: '2026-02-02',
+			end: '2026-03-20',
+			subtasks: [
+				{ description: 'API design', duration: 1 },
+				{ description: 'Implementation', duration: 3 },
+				{ description: 'Tests', duration: 1 }
+			]
+		}
+	]}
+/>
+```
+
+`GanttSubtask`:
+
+| Field | Type | Description |
+|-------|------|--------------|
+| `description` | `string` | Text drawn inside the segment (**required**) |
+| `duration` | `number` | Unitless weight — only its share of the array's total sets the segment's width (**required**) |
 
 ---
 

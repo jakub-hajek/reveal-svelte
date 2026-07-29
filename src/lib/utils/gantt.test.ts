@@ -11,6 +11,7 @@ import {
 	ganttDependencyPath,
 	ganttLabelInk,
 	ganttMarkerLabelAnchor,
+	ganttSubtaskSegments,
 	GANTT_MILESTONE_HALF,
 	layoutGanttRows,
 	packGanttLanes,
@@ -329,6 +330,50 @@ describe('ganttBarExtent', () => {
 		const input = { barX: 300, barWidth: 0, plotWidth, milestone: true };
 		const label = resolveGanttLabel({ ...input, text: 'X', fontSize: 11 });
 		expect(ganttBarExtent(input, label).startPx).toBe(300 - GANTT_MILESTONE_HALF);
+	});
+});
+
+describe('ganttSubtaskSegments', () => {
+	it('splits proportionally to duration and covers the full 0–1 range', () => {
+		const segments = ganttSubtaskSegments([
+			{ description: 'A', duration: 1 },
+			{ description: 'B', duration: 3 }
+		]);
+		expect(segments[0]).toEqual({ description: 'A', startFraction: 0, endFraction: 0.25 });
+		expect(segments[1]).toEqual({ description: 'B', startFraction: 0.25, endFraction: 1 });
+	});
+
+	it('gives a single subtask the whole bar', () => {
+		const segments = ganttSubtaskSegments([{ description: 'Only', duration: 5 }]);
+		expect(segments).toEqual([{ description: 'Only', startFraction: 0, endFraction: 1 }]);
+	});
+
+	it('keeps fractions cumulative and ordered across more than two subtasks', () => {
+		const segments = ganttSubtaskSegments([
+			{ description: 'A', duration: 1 },
+			{ description: 'B', duration: 1 },
+			{ description: 'C', duration: 2 }
+		]);
+		expect(segments.map((s) => s.startFraction)).toEqual([0, 0.25, 0.5]);
+		expect(segments.map((s) => s.endFraction)).toEqual([0.25, 0.5, 1]);
+	});
+
+	it('returns nothing when every duration is zero or negative', () => {
+		expect(ganttSubtaskSegments([{ description: 'A', duration: 0 }])).toEqual([]);
+		expect(ganttSubtaskSegments([{ description: 'A', duration: -5 }])).toEqual([]);
+	});
+
+	it('returns nothing for an empty list', () => {
+		expect(ganttSubtaskSegments([])).toEqual([]);
+	});
+
+	it('treats a negative duration as zero rather than skewing the split', () => {
+		const segments = ganttSubtaskSegments([
+			{ description: 'A', duration: -1 },
+			{ description: 'B', duration: 1 }
+		]);
+		expect(segments[0]).toEqual({ description: 'A', startFraction: 0, endFraction: 0 });
+		expect(segments[1]).toEqual({ description: 'B', startFraction: 0, endFraction: 1 });
 	});
 });
 

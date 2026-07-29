@@ -14,11 +14,13 @@
 		ganttDependencyPath,
 		ganttLabelInk,
 		ganttMarkerLabelAnchor,
+		ganttSubtaskSegments,
 		ganttTooltipLabels,
 		ganttTooltipText,
 		GANTT_MILESTONE_HALF,
 		layoutGanttRows,
 		placeGanttTooltip,
+		readableTextColor,
 		resolveGanttArrows,
 		toUTCms
 	} from '../../utils/gantt';
@@ -28,6 +30,7 @@
 		GanttItem,
 		GanttLane,
 		GanttRow,
+		GanttSubtaskSegment,
 		GanttTooltipModel
 	} from '../../utils/gantt';
 	import type { GanttMarker, GanttTask } from '../../types/charts';
@@ -303,6 +306,17 @@
 
 	function barColor(bar: GanttBarSpec): string {
 		return bar.color ?? sectionColor(bar.section ?? '');
+	}
+
+	/**
+	 * Segments a task's bar into its subtasks — only for a task drawn on its own
+	 * row. A task rolled into a collapsed group's packed bar is a `'group-collapsed'`
+	 * row, not `'task'`, so it stays a plain bar without extra lookup logic.
+	 */
+	function subtaskSegments(row: GanttRow, bar: GanttBarSpec): GanttSubtaskSegment[] | null {
+		if (row.kind !== 'task' || bar.taskIndex < 0 || bar.milestone) return null;
+		const subtasks = tasks[bar.taskIndex]?.subtasks;
+		return subtasks?.length ? ganttSubtaskSegments(subtasks) : null;
 	}
 
 	function clampProgress(value: number): number {
@@ -698,6 +712,7 @@
 								{@const bar = lane.bar}
 								{@const band = laneBand(row, lane.lane)}
 								{@const box = laneBox(lane)}
+								{@const segments = subtaskSegments(row, bar)}
 								<div class="gantt-lane" style="top: {band.top}px; height: {band.height}px;">
 									{#if bar.milestone}
 										<svelte:element
@@ -716,14 +731,26 @@
 											class:abuts={lane.abuts}
 											class:is-active={activeKey === bar.key}
 											style="left: {box.startPct}%; width: {box.endPct -
-												box.startPct}%; background: {bar.progress != null
-												? `color-mix(in srgb, ${barColor(bar)} 30%, transparent)`
-												: barColor(bar)};"
+												box.startPct}%; background: {segments || bar.progress == null
+												? barColor(bar)
+												: `color-mix(in srgb, ${barColor(bar)} 30%, transparent)`};"
 											{...barAttrs(bar)}
 										>
 											<!-- a span, not a div: the bar is a button, whose content
 											     model is phrasing only -->
-											{#if bar.progress != null}
+											{#if segments}
+												{#each segments as seg, si (si)}
+													<span
+														class="gantt-subtask"
+														style="left: {seg.startFraction *
+															100}%; width: {(seg.endFraction - seg.startFraction) *
+															100}%; color: {readableTextColor(barColor(bar))};"
+														aria-hidden="true"
+													>
+														<span class="gantt-subtask-label">{seg.description}</span>
+													</span>
+												{/each}
+											{:else if bar.progress != null}
 												<span
 													class="gantt-progress"
 													style="width: {clampProgress(bar.progress)}%; background: {barColor(bar)};"
@@ -1095,6 +1122,38 @@
 		bottom: 0;
 		left: 0;
 		border-radius: 4px;
+	}
+
+	/*
+	 * No lane of their own: a segment fills the same box `.gantt-bar` already
+	 * occupies, just sliced horizontally, and inherits its parent's rounded-corner
+	 * clip via `overflow: hidden` on `.gantt-bar`.
+	 */
+	.gantt-subtask {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		display: flex;
+		align-items: center;
+		overflow: hidden;
+	}
+
+	/* same seam token as `.gantt-bar.abuts::before` — two adjacent things that
+	   must not read as one */
+	.gantt-subtask:not(:last-child) {
+		border-right: 1px solid var(--gantt-bar-seam-color, var(--theme-bg, #1e1e2e));
+	}
+
+	.gantt-subtask-label {
+		flex: 1;
+		min-width: 0;
+		padding: 0 4px;
+		font-size: var(--gantt-bar-label-size, 11px);
+		font-weight: 500;
+		line-height: 1;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	/*

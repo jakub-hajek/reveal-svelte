@@ -1,4 +1,4 @@
-import type { GanttTask } from '../types/charts';
+import type { GanttSubtask, GanttTask } from '../types/charts';
 export type GanttTimeUnit = 'day' | 'week' | 'month' | 'quarter' | 'year';
 export interface GanttTick {
     ms: number;
@@ -97,6 +97,19 @@ export declare function ganttBarExtent(input: {
     plotWidth: number;
     milestone?: boolean;
 }, label: GanttLabelLayout): GanttExtent;
+export interface GanttSubtaskSegment {
+    description: string;
+    /** 0–1 fraction of the bar's own width */
+    startFraction: number;
+    endFraction: number;
+}
+/**
+ * Splits a task's bar into segments proportional to each subtask's `duration`.
+ * `duration` is a unitless weight, not a time span — only its share of the sum
+ * matters. An empty or non-positive total falls back to no segments, so the
+ * caller draws the bar plain instead of dividing by zero.
+ */
+export declare function ganttSubtaskSegments(subtasks: readonly GanttSubtask[]): GanttSubtaskSegment[];
 export interface GanttPackable {
     startPx: number;
     endPx: number;

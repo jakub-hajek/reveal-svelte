@@ -242,6 +242,24 @@ export function ganttBarExtent(input, label) {
     };
 }
 /**
+ * Splits a task's bar into segments proportional to each subtask's `duration`.
+ * `duration` is a unitless weight, not a time span — only its share of the sum
+ * matters. An empty or non-positive total falls back to no segments, so the
+ * caller draws the bar plain instead of dividing by zero.
+ */
+export function ganttSubtaskSegments(subtasks) {
+    const total = subtasks.reduce((sum, s) => sum + Math.max(s.duration, 0), 0);
+    if (total <= 0)
+        return [];
+    let cursor = 0;
+    return subtasks.map((s) => {
+        const width = Math.max(s.duration, 0) / total;
+        const seg = { description: s.description, startFraction: cursor, endFraction: cursor + width };
+        cursor += width;
+        return seg;
+    });
+}
+/**
  * Assigns each item the lowest lane that has room for it — greedy interval-graph
  * colouring. Sorting by start first is what makes it optimal: the lane count it
  * returns is exactly the largest number of items overlapping at any one point.
