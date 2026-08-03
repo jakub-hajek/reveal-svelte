@@ -1092,6 +1092,56 @@ export function ganttMarkerLabelAnchor(pct: number): GanttMarkerAnchor {
 	return 'middle';
 }
 
+export interface GanttMarkerLabelInput {
+	/** px from the plot's left edge to the marker's own line */
+	x: number;
+	text: string;
+	anchor: GanttMarkerAnchor;
+}
+
+/** Horizontal breathing room between two captions sharing a row. */
+const MARKER_LABEL_GAP = 6;
+/** Mirrors `.gantt-marker-label { padding: 0 4px }`. */
+const MARKER_LABEL_PAD = 8;
+
+/**
+ * Assigns each marker caption a row — 0 for the axis's own line, 1, 2, ... for
+ * however many more a tight cluster of dates needs — so captions close enough
+ * to collide stack into extra lines instead of printing on top of one
+ * another. The line each marker draws down through the plot stays exactly on
+ * its date regardless of which row its caption lands in.
+ *
+ * Markers are visited by date, earliest first: each caption takes the lowest
+ * row that's clear at its position, closing gaps a wider caption elsewhere
+ * left open rather than opening a new row it doesn't need.
+ */
+export function placeGanttMarkerLabelRows(
+	markers: readonly GanttMarkerLabelInput[],
+	fontSize: number
+): number[] {
+	const boxes = markers.map((marker, index) => {
+		const width = estimateTextWidth(marker.text, fontSize) + MARKER_LABEL_PAD;
+		const left =
+			marker.anchor === 'start'
+				? marker.x
+				: marker.anchor === 'end'
+					? marker.x - width
+					: marker.x - width / 2;
+		return { index, x: marker.x, left, right: left + width };
+	});
+
+	// index i holds the right edge already committed on row i
+	const rowEdges: number[] = [];
+	const rows = new Array<number>(markers.length).fill(0);
+	for (const box of [...boxes].sort((a, b) => a.x - b.x)) {
+		let row = rowEdges.findIndex((committed) => box.left >= committed + MARKER_LABEL_GAP);
+		if (row === -1) row = rowEdges.length;
+		rowEdges[row] = box.right;
+		rows[box.index] = row;
+	}
+	return rows;
+}
+
 // ---------------------------------------------------------------------------
 // Dependency arrows
 // ---------------------------------------------------------------------------

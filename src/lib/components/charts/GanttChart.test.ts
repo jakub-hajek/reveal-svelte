@@ -117,6 +117,40 @@ describe('GanttChart component', () => {
 		expect(axisHeight(labelled.container as HTMLElement)).toBe('44px');
 	});
 
+	it('drops a colliding marker caption to a second line instead of overlapping', () => {
+		const axisHeight = (root: HTMLElement) =>
+			root.querySelector<HTMLElement>('.gantt-body')?.style.getPropertyValue('--gantt-axis-h');
+		const { getByText, container } = render(GanttChart, {
+			props: {
+				tasks,
+				markers: [
+					{ date: '2026-02-01', label: 'Design review kickoff' },
+					{ date: '2026-02-01', label: 'Stakeholder demo' }
+				]
+			}
+		});
+		expect(getByText('Design review kickoff').style.top).toBe('0px');
+		expect(getByText('Stakeholder demo').style.top).toBe('18px');
+		expect(axisHeight(container as HTMLElement)).toBe('62px');
+	});
+
+	it('keeps well-separated marker captions on the same line', () => {
+		const axisHeight = (root: HTMLElement) =>
+			root.querySelector<HTMLElement>('.gantt-body')?.style.getPropertyValue('--gantt-axis-h');
+		const { getByText, container } = render(GanttChart, {
+			props: {
+				tasks,
+				markers: [
+					{ date: '2026-01-20', label: 'Kickoff' },
+					{ date: '2026-03-01', label: 'Go-live' }
+				]
+			}
+		});
+		expect(getByText('Kickoff').style.top).toBe('0px');
+		expect(getByText('Go-live').style.top).toBe('0px');
+		expect(axisHeight(container as HTMLElement)).toBe('44px');
+	});
+
 	it('renders axis ticks and matching gridlines', () => {
 		const { container } = render(GanttChart, { props: { tasks } });
 		const ticks = container.querySelectorAll('.gantt-tick');

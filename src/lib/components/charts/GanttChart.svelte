@@ -19,6 +19,7 @@
 		ganttTooltipText,
 		GANTT_MILESTONE_HALF,
 		layoutGanttRows,
+		placeGanttMarkerLabelRows,
 		placeGanttTooltip,
 		readableTextColor,
 		resolveGanttArrows,
@@ -86,8 +87,10 @@
 	const TOOLTIP_DELAY_MS = 120;
 	/** matches `.gantt-axis { height: var(--gantt-axis-h, 26px) }` below */
 	const AXIS_HEIGHT = 26;
-	/** extra axis height claimed by the marker captions, when any marker has one */
+	/** extra axis height claimed by each row of marker captions, when any marker has one */
 	const MARKER_BAND = 18;
+	/** matches `.gantt-marker-label { font-size: var(--gantt-marker-label-size, 11px) }` below */
+	const MARKER_LABEL_SIZE = 11;
 	/** matches `.gantt-tooltip` padding in the stylesheet below */
 	const TOOLTIP_PAD_X = 10;
 
@@ -214,9 +217,30 @@
 			}));
 	});
 
-	/** the captions get their own band above the ticks, but only if there are any */
+	/**
+	 * Which row (0, 1, 2, ...) each marker's caption prints on, keyed by its
+	 * `key`, so two dates close enough to collide stack onto extra lines instead
+	 * of printing on top of each other.
+	 */
+	const markerLabelRows = $derived.by(() => {
+		const labeled = markerLines.filter((marker): marker is typeof marker & { label: string } =>
+			Boolean(marker.label)
+		);
+		if (!labeled.length) return new Map<string, number>();
+		const rows = placeGanttMarkerLabelRows(
+			labeled.map((marker) => ({
+				x: (marker.pct / 100) * plotWidth,
+				text: marker.label,
+				anchor: marker.anchor
+			})),
+			MARKER_LABEL_SIZE
+		);
+		return new Map(labeled.map((marker, i) => [marker.key, rows[i]]));
+	});
+
+	/** the captions get their own band above the ticks, one row's worth per row it took */
 	const axisHeight = $derived(
-		AXIS_HEIGHT + (markerLines.some((marker) => marker.label) ? MARKER_BAND : 0)
+		AXIS_HEIGHT + (markerLabelRows.size ? MARKER_BAND * (Math.max(...markerLabelRows.values()) + 1) : 0)
 	);
 
 	/** `dependsOn` accepts either an explicit `id` or a task `label`; ids win */
@@ -675,7 +699,8 @@
 						{#if marker.label}
 							<span
 								class="gantt-marker-label is-{marker.anchor}"
-								style="left: {marker.pct}%; {marker.color ? `color: ${marker.color};` : ''}"
+								style="left: {marker.pct}%; top: {(markerLabelRows.get(marker.key) ?? 0) *
+									MARKER_BAND}px; {marker.color ? `color: ${marker.color};` : ''}"
 								>{marker.label}</span
 							>
 						{/if}
