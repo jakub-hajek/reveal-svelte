@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGanttAnchorMap, buildGanttTree, computeGanttScale, estimateTextWidth, formatGanttDate, ganttArrowHead, ganttBarExtent, ganttDependencyPath, ganttLabelInk, ganttMarkerLabelAnchor, ganttSubtaskSegments, GANTT_MILESTONE_HALF, layoutGanttRows, packGanttLanes, parseColorRGB, relativeLuminance, readableTextColor, resolveGanttArrows, resolveGanttLabel, rollUpGanttGroup, toUTCms, buildGanttTooltipModel, estimateGanttTooltipHeight, formatGanttDuration, ganttDurationDays, ganttTooltipLabels, ganttTooltipText, placeGanttTooltip, GANTT_TOOLTIP_GAP } from './gantt';
+import { buildGanttAnchorMap, buildGanttTree, computeGanttScale, estimateTextWidth, formatGanttDate, ganttArrowHead, ganttBarExtent, ganttDependencyPath, ganttLabelInk, ganttMarkerLabelAnchor, ganttSubtaskSegments, GANTT_MILESTONE_HALF, layoutGanttRows, placeGanttMarkerLabelRows, packGanttLanes, parseColorRGB, relativeLuminance, readableTextColor, resolveGanttArrows, resolveGanttLabel, rollUpGanttGroup, toUTCms, buildGanttTooltipModel, estimateGanttTooltipHeight, formatGanttDuration, ganttDurationDays, ganttTooltipLabels, ganttTooltipText, placeGanttTooltip, GANTT_TOOLTIP_GAP } from './gantt';
 const DAY_MS = 86_400_000;
 describe('toUTCms', () => {
     it('parses ISO date strings as UTC midnight', () => {
@@ -75,6 +75,53 @@ describe('ganttMarkerLabelAnchor', () => {
         expect(ganttMarkerLabelAnchor(5.9)).toBe('start');
         expect(ganttMarkerLabelAnchor(99)).toBe('end');
         expect(ganttMarkerLabelAnchor(100)).toBe('end');
+    });
+});
+describe('placeGanttMarkerLabelRows', () => {
+    it('keeps every caption on row 0 when they have room', () => {
+        const rows = placeGanttMarkerLabelRows([
+            { x: 50, text: 'Kickoff', anchor: 'middle' },
+            { x: 900, text: 'Launch', anchor: 'middle' }
+        ], 11);
+        expect(rows).toEqual([0, 0]);
+    });
+    it('drops a colliding caption to the next row instead of the first', () => {
+        const rows = placeGanttMarkerLabelRows([
+            { x: 100, text: 'Kickoff review', anchor: 'middle' },
+            { x: 110, text: 'Launch', anchor: 'middle' }
+        ], 11);
+        expect(rows[0]).toBe(0);
+        expect(rows[1]).toBe(1);
+    });
+    it('is order-independent: the input order does not decide which caption moves down', () => {
+        const forward = placeGanttMarkerLabelRows([
+            { x: 100, text: 'Kickoff review', anchor: 'middle' },
+            { x: 110, text: 'Launch', anchor: 'middle' }
+        ], 11);
+        const reversed = placeGanttMarkerLabelRows([
+            { x: 110, text: 'Launch', anchor: 'middle' },
+            { x: 100, text: 'Kickoff review', anchor: 'middle' }
+        ], 11);
+        expect(reversed[0]).toBe(forward[1]);
+        expect(reversed[1]).toBe(forward[0]);
+    });
+    it('reuses row 0 for a third caption once the first two clear the way', () => {
+        const rows = placeGanttMarkerLabelRows([
+            { x: 0, text: 'Kickoff', anchor: 'middle' },
+            { x: 5, text: 'Design review', anchor: 'middle' },
+            { x: 400, text: 'Launch', anchor: 'middle' }
+        ], 11);
+        expect(rows[0]).toBe(0);
+        expect(rows[1]).toBe(1);
+        expect(rows[2]).toBe(0);
+    });
+    it('spreads a tight cluster of three across three rows', () => {
+        const rows = placeGanttMarkerLabelRows([
+            { x: 100, text: 'Alpha review', anchor: 'middle' },
+            { x: 105, text: 'Beta review', anchor: 'middle' },
+            { x: 110, text: 'Gamma review', anchor: 'middle' }
+        ], 11);
+        expect(new Set(rows).size).toBe(3);
     });
 });
 describe('formatGanttDate', () => {
